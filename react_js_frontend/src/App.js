@@ -12,15 +12,20 @@ import Profile from "./pages/Profile";
 // PUBLIC_INTERFACE
  * App - Application shell with navigation and route definitions.
  * 
- * Uses react-router-dom v6 with a simple auth guard:
- * - ProtectedRoute redirects unauthenticated users to /auth
- * - After successful login/register, user is redirected to Home
+ * Behavior updated:
+ * - Home ("/") is now public and no longer redirects to /auth
+ * - Navbar shows Login button when logged out; opens an Auth modal with Sign In / Create Account tabs
+ * - On successful auth, modal closes and navbar updates to show user menu (Profile/Logout)
+ * - ProtectedRoute still guards authenticated-only pages
+ * - Standalone /auth route remains available but not required
  * 
  * Requires being wrapped with <BrowserRouter> in index.js to provide routing context.
  */
 function App() {
   // Initialize from persisted token so reloads stay authenticated
   const [authed, setAuthed] = useState(!!localStorage.getItem("access_token"));
+  const [showAuth, setShowAuth] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   // Persisted token check memoized
@@ -33,19 +38,18 @@ function App() {
     return () => window.removeEventListener("storage", handler);
   }, []);
 
-  // On mount, route users based on auth state if they land on root
-  useEffect(() => {
-    if (window.location.pathname === "/") {
-      // If not authenticated, go to /auth; otherwise ensure Home
-      navigate(hasToken ? "/" : "/auth", { replace: true });
-    }
-  }, [hasToken, navigate]);
-
   const onLogout = () => {
     localStorage.removeItem("access_token");
     setAuthed(false);
-    // Redirect to auth after logout
-    navigate("/auth", { replace: true });
+    setUserMenuOpen(false);
+    // Stay on current page; still allow visiting /auth if user wants
+  };
+
+  const onAuthSuccess = () => {
+    setAuthed(true);
+    setShowAuth(false);
+    setUserMenuOpen(false);
+    // Do not force navigate; remain on current route (Home or wherever user is)
   };
 
   return (
@@ -60,27 +64,133 @@ function App() {
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/centers">Service Centers</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/profile">Profile</NavLink>
           </nav>
-          <div className="row" style={{ marginLeft: "auto" }}>
-            {authed ? (
-              <button className="btn secondary" onClick={onLogout}>Logout</button>
-            ) : null}
+
+          <div className="row" style={{ marginLeft: "auto", position: "relative" }}>
+            {!authed ? (
+              <>
+                <button
+                  className="btn secondary"
+                  onClick={() => setShowAuth(true)}
+                  aria-haspopup="dialog"
+                  aria-controls="auth-modal"
+                >
+                  Login
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="btn secondary"
+                  aria-haspopup="menu"
+                  aria-expanded={userMenuOpen}
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                >
+                  Account
+                </button>
+                {userMenuOpen ? (
+                  <div
+                    role="menu"
+                    aria-label="User menu"
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 8px)",
+                      minWidth: 180,
+                      background: "var(--surface)",
+                      border: "1px solid #E5E7EB",
+                      borderRadius: "var(--radius)",
+                      boxShadow: "var(--shadow)",
+                      padding: 8,
+                      zIndex: 60,
+                    }}
+                  >
+                    <button
+                      className="nav-link"
+                      style={{ width: "100%", textAlign: "left" }}
+                      role="menuitem"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        navigate("/profile");
+                      }}
+                    >
+                      Profile
+                    </button>
+                    <button
+                      className="nav-link"
+                      style={{ width: "100%", textAlign: "left" }}
+                      role="menuitem"
+                      onClick={onLogout}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </header>
 
+      {/* Auth Modal - Ocean Professional styling */}
+      {showAuth ? (
+        <div
+          id="auth-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Authentication"
+          onClick={(e) => {
+            // click outside to close
+            if (e.target === e.currentTarget) setShowAuth(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17,24,39,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 16,
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              background: "var(--bg)",
+              borderRadius: "var(--radius)",
+              boxShadow: "var(--shadow)",
+              position: "relative",
+            }}
+          >
+            <button
+              onClick={() => setShowAuth(false)}
+              aria-label="Close"
+              className="btn secondary"
+              style={{
+                position: "absolute",
+                right: 12,
+                top: 12,
+                padding: "6px 10px",
+              }}
+            >
+              ✕
+            </button>
+            <Auth
+              onLogin={() => {
+                onAuthSuccess();
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
       <main className="main">
         <Routes>
-          {/* Root path: redirect based on auth state */}
-          <Route
-            path="/"
-            element={
-              authed ? (
-                <Home />
-              ) : (
-                <Navigate to="/auth" replace />
-              )
-            }
-          />
+          {/* Home is publicly visible now */}
+          <Route path="/" element={<Home />} />
+
           {/* Public auth route - if already authed, go Home */}
           <Route
             path="/auth"
@@ -88,16 +198,20 @@ function App() {
               authed ? (
                 <Navigate to="/" replace />
               ) : (
-                <Auth
-                  onLogin={() => {
-                    setAuthed(true);
-                    // After successful authentication go to Home
-                    navigate("/", { replace: true });
-                  }}
-                />
+                <div className="container">
+                  <div className="card" style={{ maxWidth: 640, margin: "24px auto" }}>
+                    <Auth
+                      onLogin={() => {
+                        onAuthSuccess();
+                        navigate("/", { replace: true });
+                      }}
+                    />
+                  </div>
+                </div>
               )
             }
           />
+
           {/* Protected application routes */}
           <Route
             path="/services"
@@ -131,8 +245,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-          {/* Fallback to /auth if route not found and not authed; otherwise Home */}
-          <Route path="*" element={<Navigate to={authed ? "/" : "/auth"} replace />} />
+          {/* Fallback to Home for unknown routes (public) */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
