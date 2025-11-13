@@ -90,7 +90,7 @@ export default function Parts() {
       key: "car-engine",
       title: "Car Engine",
       description: "Reliable engine assemblies and components tested for peak efficiency.",
-      img: "/assets/29765.jpg",
+      img: "/assets/20251113_120551_image.png",
       alt: "Mechanic inspecting a car engine bay with components visible",
       specs: ["OEM components", "Dyno tested", "Warranty-backed"],
     },
