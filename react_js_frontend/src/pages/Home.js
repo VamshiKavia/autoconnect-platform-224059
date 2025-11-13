@@ -43,7 +43,7 @@ export default function Home() {
             flexWrap: "wrap",
           }}
         >
-          <div className="center-col" style={{ flex: "1 1 360px", padding: 16 }}>
+          <div className="center-col vcenter-col" style={{ flex: "1 1 360px", padding: 16 }}>
             <h2 id="new-launch-heading" className="section-title" style={{ marginBottom: 6 }}>
               New Launch | Vertesa
             </h2>

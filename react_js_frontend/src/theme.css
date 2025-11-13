@@ -154,11 +154,23 @@ html, body, #root {
   height: 100%;
 }
 
-/* On small screens where columns stack, avoid excessive vertical spacing */
+/* Hero section column min-height to make vertical centering visible on larger screens */
+.vcenter-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start; /* keep text left-aligned */
+  min-height: 360px; /* matches typical hero height without being too tall */
+}
+
+/* On small screens where columns stack, reduce min-height to avoid awkward spacing */
 @media (max-width: 768px) {
   .center-col {
     justify-content: center;
     align-items: flex-start; /* maintain left alignment for accessibility */
+  }
+  .vcenter-col {
+    min-height: 220px;
   }
 }
 
