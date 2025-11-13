@@ -28,19 +28,6 @@ npm start
 
 Open http://localhost:3000
 
-## Image performance
-
-- ResponsiveImage component wraps images with:
-  - AVIF/WebP next-gen sources with graceful fallback
-  - srcset/sizes for responsive delivery
-  - lazy loading (default) and eager for above-the-fold hero
-  - optional blur placeholder to improve perceived loading
-  - layout-shift prevention via width/height
-  - optional CDN prefix via REACT_APP_CDN_URL
-
-To enable CDN for images, set REACT_APP_CDN_URL in .env (e.g., https://cdn.example.com).
-Place assets under public/assets and optionally provide .webp/.avif variants.
-
 Ensure backend is running on port 3001.
 
 ## API Paths and Health
