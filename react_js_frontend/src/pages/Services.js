@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "../api/client";
-import LazyImage from "../components/LazyImage";
 
 /**
 // PUBLIC_INTERFACE
@@ -119,18 +118,20 @@ export default function Services() {
               aria-labelledby={`${cat.key}-title`}
             >
               <figure style={{ margin: 0 }}>
-                <LazyImage
+                <img
                   src={cat.img}
                   alt={cat.alt}
                   className="hover-zoom"
                   width={640}
                   height={360}
                   loading="lazy"
-                  sizes="(max-width: 640px) 100vw, 640px"
                   style={{
                     width: "100%",
+                    height: "auto",
+                    borderRadius: 8,
+                    objectFit: "contain",
+                    background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
                   }}
-                  placeholder={cat.img}
                 />
                 <figcaption className="sr-only" id={`${cat.key}-fig`}>
                   {cat.title}

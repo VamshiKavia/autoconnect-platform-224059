@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiHealth, getApiBase } from "../api/client";
-import LazyImage from "../components/LazyImage";
 
 /**
 // PUBLIC_INTERFACE
@@ -141,20 +140,22 @@ export default function Home() {
             }}
           >
             {/* Use root-relative public path so it works in CRA and previews */}
-            <LazyImage
+            <img
               src="/assets/launch-hero-19609795.png"
               alt="Ocean Motors Aerexa latest car model"
               className="hover-zoom"
               style={{
                 width: "100%",
                 maxWidth: 640,
+                height: "auto",
+                borderRadius: 8,
+                objectFit: "contain",
                 display: "block",
+                background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
               }}
               width={640}
               height={360}
               loading="eager"
-              decoding="async"
-              placeholder="/assets/launch-hero-19609795.png"
             />
           </div>
         </div>
@@ -173,18 +174,20 @@ export default function Home() {
             tabIndex={-1}
           >
             <figure style={{ margin: 0 }}>
-              <LazyImage
+              <img
                 src={item.img}
                 alt={item.alt}
                 className="hover-zoom"
                 width={item.width}
                 height={item.height}
                 loading="lazy"
-                sizes="(max-width: 640px) 100vw, 640px"
                 style={{
                   width: "100%",
+                  height: "auto",
+                  borderRadius: 8,
+                  objectFit: "contain",
+                  background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
                 }}
-                placeholder={item.img}
               />
               <figcaption className="sr-only" aria-hidden="true">
                 {item.name}

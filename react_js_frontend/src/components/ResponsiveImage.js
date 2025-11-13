@@ -7,7 +7,7 @@ import React from "react";
  * Features:
  * - srcSet and sizes for responsive delivery
  * - Next-gen formats (AVIF/WebP) with graceful fallback to original format
- * - Lazy loading by default, eager optional (consider using LazyImage for IO fallback)
+ * - Lazy loading by default, eager optional
  * - Prevents CLS via width/height props
  * - Optional low-quality blur placeholder (LQIP)
  * - Optional CDN prefix via REACT_APP_CDN_URL
