@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent, act, within } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 // Under test
@@ -49,7 +49,7 @@ const MOCK_CENTERS = [
     id: "mandovi-jpn",
     name: "Mandovi Motors JP Nagar",
     address: "JP Nagar 1st Phase, Bengaluru",
-    lat: 12.914, // near JP Nagar
+    lat: 12.914,
     lng: 77.585,
     phone: "+91-80-2244-0000",
   },
@@ -71,12 +71,10 @@ const MOCK_CENTERS = [
   },
 ];
 
-describe("ServiceCenters - URL sync, filtering, and map behavior", () => {
+describe("ServiceCenters - explicit Search apply behavior", () => {
   beforeEach(() => {
     jest.useFakeTimers();
-    // Default: geolocation denied to keep deterministic center
     mockGeolocation({ allowed: false });
-    // By default return list of centers for initial load
     apiGet.mockImplementation(async (path) => {
       if (String(path).startsWith("/service-centers")) {
         return MOCK_CENTERS;
@@ -102,156 +100,164 @@ describe("ServiceCenters - URL sync, filtering, and map behavior", () => {
     return screen.getByLabelText(/filter by brand/i);
   }
 
-  test("initializes state from URL (?q=car%20service%20center&brand=TOYOTA) and updates list + inputs", async () => {
+  function getSearchButton() {
+    return screen.getByRole("button", { name: /search service centers with current filters/i });
+  }
+
+  test("initializes inputs and applied state from URL, renders list and map", async () => {
     renderAt("/centers?q=car%20service%20center&brand=TOYOTA");
 
-    // Wait for initial load label to disappear and list render
     expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
-    // Input reflects URL 'q'
-    const search = getSearchInput();
-    expect(search).toHaveValue("car service center");
 
-    // Brand reflects URL brand=TOYOTA
-    const select = getBrandSelect();
-    expect(select).toHaveValue("TOYOTA");
+    expect(getSearchInput()).toHaveValue("car service center");
+    expect(getBrandSelect()).toHaveValue("TOYOTA");
 
-    // List shows filtered items (client filtering still renders from dataset)
-    // At least one center card should appear
-    const anyCard = await screen.findByRole("button", {
-      name: /select/i,
-    });
+    const anyCard = await screen.findByRole("button", { name: /select/i });
     expect(anyCard).toBeInTheDocument();
 
-    // Map iframe exists with a src that includes OpenStreetMap embed
     const iframe = getMapIframe();
-    expect(iframe).toBeInTheDocument();
     expect(iframe).toHaveAttribute("src");
     expect(iframe.getAttribute("src")).toMatch(/openstreetmap\.org\/export\/embed\.html\?bbox=/);
   });
 
-  test("changing search input updates URL query (debounced) without reload", async () => {
-    renderAt("/centers");
-
-    // Ensure initial content
-    expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
-
-    const search = getSearchInput();
-    fireEvent.change(search, { target: { value: "Nandi" } });
-
-    // Advance debounce (300ms)
-    await act(async () => {
-      jest.advanceTimersByTime(310);
-    });
-
-    // Assert URL updated - MemoryRouter manages history; use window.location.search
-    expect(window.location.search).toMatch(/q=Nandi/);
-
-    // Not a full reload - content remains
-    expect(screen.getByText(/Service Centers/i)).toBeInTheDocument();
-  });
-
-  test("selecting a brand updates URL and filters list", async () => {
-    renderAt("/centers?q=JP%20Nagar");
-
-    expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
-
-    const select = getBrandSelect();
-    // Change brand to HYUNDAI
-    fireEvent.change(select, { target: { value: "HYUNDAI" } });
-
-    // brand updates immediately (no debounce for select)
-    expect(window.location.search).toMatch(/brand=HYUNDAI|brand=HYUNDAI/i);
-
-    // Cards remain rendered; ensure at least one still visible
-    const cards = await screen.findAllByRole("button", { name: /select/i });
-    expect(cards.length).toBeGreaterThan(0);
-  });
-
-  test("back/forward navigation restores search/brand and list state", async () => {
-    renderAt("/centers?q=Advaith&brand=HYUNDAI");
-    expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
-
-    // Make a change to q and brand
-    fireEvent.change(getSearchInput(), { target: { value: "Nandi" } });
-    await act(async () => {
-      jest.advanceTimersByTime(320);
-    });
-    fireEvent.change(getBrandSelect(), { target: { value: "TOYOTA" } });
-
-    // URL should now include Nandi & brand=TOYOTA
-    expect(window.location.search).toMatch(/q=Nandi/);
-    expect(window.location.search).toMatch(/brand=TOYOTA/);
-
-    // Simulate back - MemoryRouter won't change automatically; use history API to trigger popstate
-    act(() => {
-      window.history.pushState({}, "", "/centers?q=Advaith&brand=HYUNDAI");
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
-
-    // Inputs reflect restored state
-    expect(getSearchInput()).toHaveValue("Advaith");
-    expect(getBrandSelect()).toHaveValue("HYUNDAI");
-  });
-
-  test("map iframe src updates when filters change (recenter/zoom) with geolocation denied", async () => {
-    // geolocation denied in beforeEach
+  test("typing updates URL preview (debounced) but map/list do not change until Search clicked", async () => {
     renderAt("/centers");
 
     expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
 
     const iframeBefore = getMapIframe();
     const srcBefore = iframeBefore.getAttribute("src");
-    expect(srcBefore).toMatch(/openstreetmap\.org\/export\/embed\.html\?bbox=/);
 
-    // Change filters to narrow to one likely closest center
+    const search = getSearchInput();
+    fireEvent.change(search, { target: { value: "Advaith" } });
+
+    // URL preview updates after debounce
+    await act(async () => {
+      jest.advanceTimersByTime(320);
+    });
+    expect(window.location.search).toMatch(/q=Advaith/);
+
+    // But map src should remain unchanged until submit
+    expect(getMapIframe().getAttribute("src")).toEqual(srcBefore);
+
+    // Click Search to apply filters
+    fireEvent.click(getSearchButton());
+
+    // Now map should change (recenter)
+    const srcAfter = getMapIframe().getAttribute("src");
+    expect(srcAfter).toBeTruthy();
+    expect(srcAfter).not.toEqual(srcBefore);
+    expect(srcAfter).toMatch(/marker=/);
+  });
+
+  test("brand selection updates URL preview immediately, applies only after Search submit", async () => {
+    renderAt("/centers?q=JP%20Nagar");
+
+    expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
+
+    const iframeBefore = getMapIframe().getAttribute("src");
+
+    fireEvent.change(getBrandSelect(), { target: { value: "HYUNDAI" } });
+    expect(window.location.search).toMatch(/brand=HYUNDAI/);
+
+    // Not applied yet; map unchanged
+    expect(getMapIframe().getAttribute("src")).toEqual(iframeBefore);
+
+    // Submit to apply
+    fireEvent.click(getSearchButton());
+    const srcAfter = getMapIframe().getAttribute("src");
+    expect(srcAfter).not.toEqual(iframeBefore);
+  });
+
+  test("Enter key in search input submits and applies filters", async () => {
+    renderAt("/centers");
+    expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
+
+    const srcBefore = getMapIframe().getAttribute("src");
+
+    const input = getSearchInput();
+    fireEvent.change(input, { target: { value: "Nandi" } });
+    await act(async () => {
+      jest.advanceTimersByTime(320);
+    });
+    // Press Enter to submit
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const srcAfter = getMapIframe().getAttribute("src");
+    expect(srcAfter).not.toEqual(srcBefore);
+  });
+
+  test("Search button disabled when inputs are empty or unchanged", async () => {
+    renderAt("/centers");
+    expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
+
+    // Initially both empty -> disabled
+    expect(getSearchButton()).toBeDisabled();
+
+    // Type then revert to same applied state (still empty after trimming)
+    fireEvent.change(getSearchInput(), { target: { value: "   " } });
+    await act(async () => {
+      jest.advanceTimersByTime(320);
+    });
+    expect(getSearchButton()).toBeDisabled();
+
+    // Change to something -> enabled
     fireEvent.change(getSearchInput(), { target: { value: "Advaith" } });
     await act(async () => {
       jest.advanceTimersByTime(320);
     });
+    expect(getSearchButton()).not.toBeDisabled();
 
-    const iframeAfter = getMapIframe();
-    const srcAfter = iframeAfter.getAttribute("src");
-
-    // The src should change to reflect new center or bbox
-    expect(srcAfter).toBeTruthy();
-    expect(srcAfter).not.toEqual(srcBefore);
-    // Marker param exists
-    expect(srcAfter).toMatch(/marker=/);
+    // Submit to apply
+    fireEvent.click(getSearchButton());
+    // Now unchanged vs applied -> disabled again
+    expect(getSearchButton()).toBeDisabled();
   });
 
-  test("map iframe src updates when geolocation allowed (origin changes)", async () => {
-    // Override geolocation to allow
-    mockGeolocation({ allowed: true, lat: 12.90, lng: 77.57 });
-
-    renderAt("/centers");
-
+  test("back/forward navigation restores inputs and applied state", async () => {
+    renderAt("/centers?q=Advaith&brand=HYUNDAI");
     expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
-    const iframe = getMapIframe();
-    const src = iframe.getAttribute("src");
-    expect(src).toMatch(/openstreetmap\.org\/export\/embed\.html\?bbox=/);
-    // Should include marker with a lat/lng derived from filtered result near allowed location
-    expect(src).toMatch(/marker=\d{1,2}\.\d+,\d{1,3}\.\d+/);
+
+    // Type and change brand (URL preview)
+    fireEvent.change(getSearchInput(), { target: { value: "Nandi" } });
+    await act(async () => jest.advanceTimersByTime(320));
+    fireEvent.change(getBrandSelect(), { target: { value: "TOYOTA" } });
+    expect(window.location.search).toMatch(/q=Nandi/);
+    expect(window.location.search).toMatch(/brand=TOYOTA/);
+
+    // Simulate back to previous state in URL
+    act(() => {
+      window.history.pushState({}, "", "/centers?q=Advaith&brand=HYUNDAI");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    // Inputs restored
+    expect(getSearchInput()).toHaveValue("Advaith");
+    expect(getBrandSelect()).toHaveValue("HYUNDAI");
+
+    // Search button is disabled because unchanged vs applied state
+    expect(getSearchButton()).toBeDisabled();
   });
 
-  test("no matches shows friendly message and map center remains unchanged", async () => {
+  test("no matches after applying filters shows friendly message and map center remains unchanged", async () => {
     renderAt("/centers");
-
     expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
-    const iframe = getMapIframe();
-    const srcBefore = iframe.getAttribute("src");
 
-    // Set a query that doesn't match any center
+    const srcBefore = getMapIframe().getAttribute("src");
+
+    // Type a non-matching query
     fireEvent.change(getSearchInput(), { target: { value: "zzzzzzzzz" } });
     await act(async () => {
       jest.advanceTimersByTime(320);
     });
 
-    // Friendly message
+    // Not applied yet -> click Search
+    fireEvent.click(getSearchButton());
+
     expect(
       await screen.findByText(/No centers found for the current filters/i)
     ).toBeInTheDocument();
 
-    // Map src remains same (no recenter on no-match)
     const srcAfter = getMapIframe().getAttribute("src");
     expect(srcAfter).toEqual(srcBefore);
   });
@@ -262,33 +268,23 @@ describe("ServiceCenters - URL sync, filtering, and map behavior", () => {
     expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
 
     const btn = screen.getByRole("button", { name: /fullscreen/i });
-    expect(btn).toBeInTheDocument();
     expect(btn).toHaveAttribute("aria-pressed", "false");
 
-    // Toggle on
     fireEvent.click(btn);
     expect(btn).toHaveAttribute("aria-pressed", "true");
 
-    // Overlay class applied to map card container (parent of iframe)
-    const mapContainer = btn.closest(".card")?.parentElement?.querySelector(".map-card");
-    // As structure may differ, search by label
     const containers = screen.getAllByLabelText("Map container");
     expect(containers.length).toBeGreaterThan(0);
-    const overlayFound = containers.some((c) =>
-      c.className.includes("fullscreen-overlay")
-    );
+    const overlayFound = containers.some((c) => c.className.includes("fullscreen-overlay"));
     expect(overlayFound).toBe(true);
 
-    // Toggle off
     fireEvent.click(btn);
     expect(btn).toHaveAttribute("aria-pressed", "false");
-    const overlayStill = containers.some((c) =>
-      c.className.includes("fullscreen-overlay")
-    );
+    const overlayStill = containers.some((c) => c.className.includes("fullscreen-overlay"));
     expect(overlayStill).toBe(false);
   });
 
-  test("fullscreen toggle has correct accessibility attributes", async () => {
+  test("fullscreen toggle accessibility (Enter/Space)", async () => {
     renderAt("/centers");
     expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
 
@@ -296,11 +292,9 @@ describe("ServiceCenters - URL sync, filtering, and map behavior", () => {
     expect(btn).toHaveAttribute("aria-label", expect.stringMatching(/fullscreen/i));
     expect(btn).toHaveAttribute("aria-pressed", "false");
 
-    // Activate via keyboard (Enter)
     fireEvent.keyDown(btn, { key: "Enter" });
     expect(btn).toHaveAttribute("aria-pressed", "true");
 
-    // Deactivate via keyboard (Space)
     fireEvent.keyDown(btn, { key: " " });
     expect(btn).toHaveAttribute("aria-pressed", "false");
   });

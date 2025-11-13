@@ -5,26 +5,14 @@ import { apiGet } from "../api/client";
 // PUBLIC_INTERFACE
  * ServiceCenters - Find service centers with map, filters, and geolocation sorting.
  *
- * Enhancements:
- * - On search/brand change, compute filtered results and recenter/zoom map to nearest match.
- * - If geolocation is unavailable, use ISRO Layout (Bangalore) as origin for distance sorting.
- * - Debounce text input to avoid excessive map updates.
- * - If no matches, show message and keep previous map center/zoom.
- * - Fullscreen toggle for map with accessibility and scroll lock.
- * - Sync filters to URL (?q=...&brand=...) with debounce and history updates.
+ * Update: Introduce explicit Search button to apply filters. Inputs remain controlled,
+ * URL preview keeps syncing (debounced for q), but actual filtering/map recenter only
+ * happen on Search button click or Enter key submit.
  *
- * Features (existing preserved):
- * - Default map location: ISRO Layout, Bangalore (12.9022, 77.5660), radius 20 km
- * - Optional geolocation: if granted, use device location to sort by nearest
- * - Filters:
- *    - q: text search across name/address
- *    - brand: All | HYUNDAI | TOYOTA | SUZUKI | BMW | AUDI | MERCEDES-BENZ
- * - Map: OpenStreetMap iframe centered on selected center; click a card to highlight and recenter
- * - Directions: Google Maps link using lat,lng
- *
- * Notes:
- * - Backend /service-centers supports q, lat, lng, radius_km, limit and may return distance_km.
- * - When backend distance is unavailable, compute Haversine client-side.
+ * Behaviors preserved:
+ * - Fullscreen toggle, geolocation fallback (ISRO Layout), and friendly no-match message
+ * - URL q and brand sync on submit
+ * - Accessibility: Enter key submission and Search button with aria-label
  */
 export default function ServiceCenters() {
   // ISRO Layout default center
@@ -42,7 +30,7 @@ export default function ServiceCenters() {
     { value: "MERCEDES-BENZ", label: "MERCEDES-BENZ" },
   ];
 
-  // UI state
+  // UI state (controlled inputs)
   const [centers, setCenters] = useState([]);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
@@ -50,6 +38,10 @@ export default function ServiceCenters() {
   const [selectedId, setSelectedId] = useState(null);
   const [userLoc, setUserLoc] = useState(null); // {lat,lng} if geolocation granted
   const [loading, setLoading] = useState(true);
+
+  // Applied filters state: only changes on submit
+  const [appliedQ, setAppliedQ] = useState("");
+  const [appliedBrand, setAppliedBrand] = useState("all");
 
   // Map state to preserve previous center/zoom on no-match
   const [mapState, setMapState] = useState({
@@ -64,6 +56,9 @@ export default function ServiceCenters() {
 
   // Track initial URL parsing to avoid redundant replace on mount
   const didInitFromUrl = useRef(false);
+
+  // For disable Search button when unchanged or empty
+  const initialUrlStateRef = useRef({ q: "", brand: "all" });
 
   // Lock body scroll when fullscreen
   useEffect(() => {
@@ -96,33 +91,41 @@ export default function ServiceCenters() {
 
   // Read initial params on mount and on popstate for back/forward
   useEffect(() => {
-    const applyFromLocation = () => {
+    const applyFromLocation = (applyToInputsOnly = true) => {
       try {
         const sp = new URLSearchParams(window.location.search);
         const qParam = sp.get("q") || "";
         const brandParamRaw = sp.get("brand");
         const brandParam = normalizeBrandFromUrl(brandParamRaw);
-        // Set only if different to avoid unnecessary renders
+
+        // Set controlled inputs
         setQ(qParam);
         setBrand(brandParam);
+
+        // On initial mount or popstate, also set applied values to match URL
+        if (!didInitFromUrl.current || !applyToInputsOnly) {
+          setAppliedQ(qParam);
+          setAppliedBrand(brandParam);
+          initialUrlStateRef.current = { q: qParam, brand: brandParam };
+        }
       } catch {
         // ignore malformed URL
       }
     };
 
-    // Initial apply from URL
+    // Initial apply from URL (inputs + applied)
     if (!didInitFromUrl.current) {
-      applyFromLocation();
+      applyFromLocation(false);
       didInitFromUrl.current = true;
     }
 
-    // Listen to back/forward to restore state from URL
-    const onPop = () => applyFromLocation();
+    // Listen to back/forward to restore state from URL (apply both)
+    const onPop = () => applyFromLocation(false);
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // Debounced query value to throttle updates and URL changes
+  // Debounced query value to throttle updates and URL preview changes
   const [debouncedQ, setDebouncedQ] = useState(q);
   const debounceTimer = useRef(null);
   useEffect(() => {
@@ -133,9 +136,8 @@ export default function ServiceCenters() {
     };
   }, [q]);
 
-  // Update URL when search or brand changes (debounced for q)
+  // Update URL preview when the user types/selects (debounced for q); no filtering yet
   useEffect(() => {
-    // Build new query params
     const sp = new URLSearchParams(window.location.search);
 
     // q param: set only if non-empty; else remove
@@ -146,12 +148,10 @@ export default function ServiceCenters() {
       sp.delete("q");
     }
 
-    // brand param: if "all" treat as no brand param; otherwise set brand
-    // Optionally allow brand=ALL for explicitness; choose to omit for cleaner URLs
+    // brand param: omit when 'all'
     if (brand && brand !== "all") {
       sp.set("brand", encodeURIComponent(brand).replace(/%20/g, "+"));
     } else {
-      // keep consistent: remove brand param for 'All'
       sp.delete("brand");
     }
 
@@ -159,12 +159,10 @@ export default function ServiceCenters() {
     const newUrl =
       window.location.pathname + (newSearch ? `?${newSearch}` : "");
 
-    // Use replaceState to avoid polluting history on each keystroke
-    // Ensures no full page reload
     try {
       window.history.replaceState(null, "", newUrl);
     } catch {
-      // ignore environments without History API
+      // ignore
     }
   }, [debouncedQ, brand]);
 
@@ -203,7 +201,6 @@ export default function ServiceCenters() {
   // Fetch centers with backend filters if available; fall back to client filtering
   async function loadCenters(params) {
     const query = new URLSearchParams();
-    // send debounced query to backend to help narrow results server-side
     if (params.q) query.set("q", params.q);
     if (params.lat != null && params.lng != null) {
       query.set("lat", String(params.lat));
@@ -256,11 +253,10 @@ export default function ServiceCenters() {
     return brands[sum % brands.length];
   };
 
-  // Derived filtered list (client-side brand and q safety)
+  // Derived filtered list (client-side) based on APPLIED values only
   const filteredCenters = useMemo(() => {
-    const qLower = debouncedQ.trim().toLowerCase();
+    const qLower = (appliedQ || "").trim().toLowerCase();
 
-    // Map legacy/alternate brand tokens to normalized values
     const normalizeBrand = (b) => {
       const t = (b || "").toUpperCase().trim();
       if (t === "TOYATO") return "TOYOTA";
@@ -274,11 +270,14 @@ export default function ServiceCenters() {
         (c.name || "").toLowerCase().includes(qLower) ||
         (c.address || "").toLowerCase().includes(qLower);
 
-      // Brand filter: if All, accept all; otherwise match inferred/backend brand normalized
       const inferred = inferBrand(c.id);
       const centerBrand = normalizeBrand(c.brand || inferred || "");
-      const selectedBrand = normalizeBrand(brand);
-      const brandOk = selectedBrand === "ALL" || selectedBrand === "ALL BRANDS" || selectedBrand === "ALL" || selectedBrand === "ALL BRANDS" || selectedBrand === "ALL" || selectedBrand === "ALL BRANDS" ? true : centerBrand === selectedBrand;
+      const selectedBrand = normalizeBrand(appliedBrand);
+      const brandOk =
+        selectedBrand === "ALL" ||
+        selectedBrand === "ALL BRANDS" ||
+        appliedBrand === "all" ||
+        centerBrand === selectedBrand;
 
       return matchesQ && brandOk;
     });
@@ -294,7 +293,7 @@ export default function ServiceCenters() {
     // Sort by distance from origin
     list.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
     return list;
-  }, [centers, debouncedQ, brand, userLoc?.lat, userLoc?.lng]);
+  }, [centers, appliedQ, appliedBrand, userLoc?.lat, userLoc?.lng]);
 
   const selected = useMemo(
     () => filteredCenters.find((c) => c.id === selectedId) || null,
@@ -330,24 +329,19 @@ export default function ServiceCenters() {
     };
   };
 
-  // Recenter/zoom logic on filter changes:
-  // - If there is a selected card, center to it.
-  // - Else, if there are filtered results:
-  //    - If 1 result: center to it and set closer zoom
-  //    - If multiple: set bbox covering them and keep a reasonable zoom
-  // - If no results: keep previous map center/zoom, do not change mapState
+  // Recenter/zoom logic fires when APPLIED filters or selection change
   useEffect(() => {
     if (selected) {
       setMapState((prev) => ({
         center: { lat: selected.lat, lng: selected.lng },
-        zoom: Math.max(prev.zoom || 12, 13), // a tad closer on a single selection
+        zoom: Math.max(prev.zoom || 12, 13),
         bbox: null,
       }));
       return;
     }
 
     if (filteredCenters.length === 0) {
-      // no-op: keep previous map center/zoom, show message in UI
+      // keep previous map center/zoom
       return;
     }
 
@@ -355,27 +349,24 @@ export default function ServiceCenters() {
       const c = filteredCenters[0];
       setMapState({
         center: { lat: c.lat, lng: c.lng },
-        zoom: 14, // closer
+        zoom: 14,
         bbox: null,
       });
       return;
     }
 
-    // Multiple centers: compute a bbox that fits all
     const bbox = computeBBox(filteredCenters);
     if (bbox) {
-      // For OSM embed using bbox, we also place marker roughly at the closest center
       const sorted = [...filteredCenters].sort(
         (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
       );
       const top = sorted[0] || filteredCenters[0];
       setMapState({
-        center: { lat: top.lat, lng: top.lng }, // used for marker param
-        zoom: 12, // zoom is ignored by bbox but keep for fallback
+        center: { lat: top.lat, lng: top.lng },
+        zoom: 12,
         bbox,
       });
     } else {
-      // Fallback: center to closest
       const sorted = [...filteredCenters].sort(
         (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
       );
@@ -386,23 +377,15 @@ export default function ServiceCenters() {
         bbox: null,
       });
     }
-  }, [
-    debouncedQ,
-    brand,
-    selected?.id, // re-run when selection changes
-    filteredCenters,
-    userLoc?.lat,
-    userLoc?.lng,
-  ]);
+  }, [appliedQ, appliedBrand, selected?.id, filteredCenters]);
 
   // Build OSM map URL from current mapState (bbox preferred)
   const buildOsmUrl = () => {
     const { center, zoom, bbox } = mapState;
     if (bbox) {
-      // bbox order: west,south,east,north
       return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.west},${bbox.south},${bbox.east},${bbox.north}&layer=mapnik&marker=${center.lat},${center.lng}`;
     }
-    const span = 0.2; // fallback span window around center if bbox not set
+    const span = 0.2;
     const west = center.lng - span;
     const south = center.lat - span;
     const east = center.lng + span;
@@ -426,6 +409,35 @@ export default function ServiceCenters() {
     setIsFullscreen((v) => !v);
   };
 
+  // Submit handler: apply inputs to filtering/map + sync URL definitively
+  const onSubmit = (e) => {
+    e.preventDefault();
+    // Apply current inputs
+    setAppliedQ(q.trim());
+    setAppliedBrand(brand);
+
+    // Sync URL immediately with applied values
+    const sp = new URLSearchParams();
+    const qVal = q.trim();
+    if (qVal) sp.set("q", qVal);
+    if (brand && brand !== "all")
+      sp.set("brand", encodeURIComponent(brand).replace(/%20/g, "+"));
+    const newSearch = sp.toString();
+    const newUrl =
+      window.location.pathname + (newSearch ? `?${newSearch}` : "");
+    try {
+      window.history.replaceState(null, "", newUrl);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Disable Search button when both empty OR unchanged vs applied
+  const isUnchanged =
+    q.trim() === (appliedQ || "").trim() && (brand || "all") === (appliedBrand || "all");
+  const isEmpty = q.trim() === "" && (brand || "all") === "all";
+  const disableSearch = isEmpty || isUnchanged;
+
   return (
     <div className="container">
       <h2 className="section-title">Service Centers</h2>
@@ -433,8 +445,8 @@ export default function ServiceCenters() {
         Find a service center near you. Default area: ISRO Layout, Bangalore (20 km radius).
       </p>
 
-      {/* Filters */}
-      <div className="card" style={{ marginBottom: 12 }}>
+      {/* Filters with explicit Search submit */}
+      <form className="card" style={{ marginBottom: 12 }} onSubmit={onSubmit} role="search" aria-label="Service centers search">
         <div className="row" style={{ flexWrap: "wrap", alignItems: "stretch" }}>
           <div style={{ flex: "1 1 240px", minWidth: 200 }}>
             <label className="label" htmlFor="q">Search</label>
@@ -445,6 +457,11 @@ export default function ServiceCenters() {
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by name or address"
               aria-label="Search service centers by name or address"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  // Let form submit naturally
+                }
+              }}
             />
           </div>
           <div style={{ flex: "0 1 200px", minWidth: 180 }}>
@@ -461,8 +478,19 @@ export default function ServiceCenters() {
               ))}
             </select>
           </div>
+          <div style={{ flex: "0 0 auto", alignSelf: "flex-end" }}>
+            <button
+              type="submit"
+              className="btn"
+              aria-label="Search service centers with current filters"
+              disabled={disableSearch}
+              title={disableSearch ? "Enter a query or change brand to search" : "Search"}
+            >
+              Search
+            </button>
+          </div>
         </div>
-      </div>
+      </form>
 
       {/* Map with fullscreen toggle */}
       <div
@@ -525,7 +553,6 @@ export default function ServiceCenters() {
         <div className="grid">
           {filteredCenters.map((c) => {
             const isSelected = c.id === selectedId;
-            // Determine display brand for the card (to help users see which brand matched)
             const displayBrandRaw = (c.brand || inferBrand(c.id) || "").toUpperCase();
             const displayBrand =
               displayBrandRaw === "TOYATO"
