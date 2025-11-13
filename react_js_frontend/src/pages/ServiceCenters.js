@@ -210,11 +210,11 @@ export default function ServiceCenters() {
       </div>
 
       {/* Map */}
-      <div className="card" style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
+      <div className="card map-card" style={{ marginBottom: 16 }}>
         <iframe
           title="Service Centers Map"
           src={osmUrl}
-          style={{ border: 0, width: "100%", height: 320, display: "block" }}
+          className="map-embed"
           aria-label="Map showing service centers around selected area"
         />
       </div>

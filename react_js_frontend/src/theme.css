@@ -303,3 +303,35 @@ textarea:focus-visible {
   color: var(--muted);
   font-size: 14px;
 }
+
+/* Map section utilities to control responsive height without layout shifts */
+.map-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Base map height (mobile-first) */
+.map-embed {
+  display: block;
+  width: 100%;
+  height: 50vh;           /* 50% of viewport height on mobile */
+  max-height: 640px;      /* cap so it doesn't get too tall on large screens */
+  min-height: 320px;      /* ensure sensible minimum */
+  border: 0;
+}
+
+/* Tablet and up: increase height */
+@media (min-width: 768px) {
+  .map-embed {
+    height: 60vh;         /* 60% viewport height */
+    max-height: 720px;
+  }
+}
+
+/* Desktop and large screens: slightly taller */
+@media (min-width: 1024px) {
+  .map-embed {
+    height: 70vh;         /* 70% viewport height */
+    max-height: 800px;
+  }
+}
