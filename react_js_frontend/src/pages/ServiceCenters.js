@@ -11,6 +11,7 @@ import { apiGet } from "../api/client";
  * - Expanded query normalization to match aliases like 'Nandi Toyota', 'Nandi Toyota Service', 'Nandi Toyota - TES'.
  * - On successful filter submit, the map recenters to the Nandi Toyota - TES coordinates at a reasonable zoom.
  * - Backward compatible: if backend already returns the entry, do not duplicate.
+ * - Enrich dataset with "Nandi Toyota - Sales - Bannerghatta Road" (TOYOTA) and normalize aliases so searches for "Toyota", "Nandi Toyota", or "Nandi Toyota Service" surface it; keep enrichment additive and idempotent.
  *
  * Verification targets:
  * - q='Nandi Toyota Service' + brand='TOYOTA' -> shows "Nandi Toyota - TES" and recenters to 12.935863923120667,77.5727056884466
@@ -25,7 +26,7 @@ export default function ServiceCenters() {
     id: "nandi-toyota-tes-kr-road",
     name: "Nandi Toyota - TES",
     address:
-      "4117, Krishna Rajendra Rd, Shastri Nagar, Banashankari Stage II, Banashankari, Bengaluru, Karnataka 560004",
+      "4117, Krishna Rajendra Rd, Shastri Nagar, Banashankari Stage II, Banashankankari, Bengaluru, Karnataka 560004",
     lat: 12.935863923120667,
     lng: 77.5727056884466,
     phone: undefined, // optional
@@ -38,6 +39,30 @@ export default function ServiceCenters() {
       "nandi toyoto", // keep original typo in aliases for matching
       "nandi toyota tes",
       "nandi-toyota tes",
+      "toyota",
+    ],
+  };
+
+  // Canonical Nandi Toyota - Sales - Bannerghatta Road (provided in task)
+  const NANDI_TOYOTA_SALES_BANNERGHATTA = {
+    id: "nandi-toyota-sales-bannerghatta-road",
+    name: "Nandi Toyota - Sales - Bannerghatta Road",
+    address:
+      "43, 1B, Bannerghatta Rd, DRC Post, Bhavani Nagar, Bengaluru, Karnataka 560029",
+    lat: 12.932031230477637,
+    lng: 77.59790932032661,
+    phone: undefined,
+    brand: "TOYOTA",
+    url:
+      "https://www.google.com/maps/place/Nandi+Toyota+-+Sales+-+Bannerghatta+Road/@12.9348754,77.5127653,12z/data=!4m10!1m2!2m1!1stoyota!3m6!1s0x3bae158b35dd4c83:0x527b4cff56e8ce9f!8m2!3d12.9279179!4d77.6007604!15sCgZ0b3lvdGEiA4gBAVoIIgZ0b3lvdGGSAQ10b3lvdGFfZGVhbGVyqgFeCg0vZy8xMWJjNnc2NzJfCggvbS8wN21iNgoKL20vMGg1eTFqMBABKgoiBnRveW90YSgAMh0QASIZIO7uMxa5twMxwjxCmPtRFVvN6PLiR_q8rjIKEAIiBnRveW90YeABAA!16s%2Fg%2F11v3hxx2qm?entry=ttu&g_ep=EgoyMDI1MTExMC4wIKXMDSoASAFQAw%3D%3D",
+    aliases: [
+      "nandi toyota",
+      "nandi toyota bannerghatta",
+      "nandi toyota sales bannerghatta road",
+      "nandi toyota service bannerghatta",
+      "nandi toyota - sales - bannerghatta road",
+      "toyota",
+      "nandi toyota showroom bannerghatta",
     ],
   };
 
@@ -278,6 +303,25 @@ export default function ServiceCenters() {
       }
     }
 
+    // Seed "Nandi Toyota - Sales - Bannerghatta Road" if not present (idempotent by id + coords + name)
+    const hasSalesById = list.some(
+      (c) => c.id === NANDI_TOYOTA_SALES_BANNERGHATTA.id
+    );
+    const hasSalesByCoords =
+      list.find(
+        (c) =>
+          Math.abs(Number(c?.lat) - NANDI_TOYOTA_SALES_BANNERGHATTA.lat) <
+            0.0005 &&
+          Math.abs(Number(c?.lng) - NANDI_TOYOTA_SALES_BANNERGHATTA.lng) <
+            0.0005 &&
+          normalizeForAlias(c?.name).includes(
+            normalizeForAlias(NANDI_TOYOTA_SALES_BANNERGHATTA.name)
+          )
+      ) != null;
+    if (!hasSalesById && !hasSalesByCoords) {
+      list.push({ ...NANDI_TOYOTA_SALES_BANNERGHATTA });
+    }
+
     // Normalize brand info to ensure TOYOTA canonical brand where applicable
     const normalized = list.map((c) => {
       const normBrand = (() => {
@@ -295,6 +339,30 @@ export default function ServiceCenters() {
           ...c,
           name: "Nandi Toyota - TES",
           brand: "TOYOTA",
+        };
+      }
+      // Normalize the sales Bannerghatta record naming and brand if matched by coords or id
+      const matchesSalesByCoords =
+        Math.abs(Number(c?.lat) - NANDI_TOYOTA_SALES_BANNERGHATTA.lat) <
+          0.0005 &&
+        Math.abs(Number(c?.lng) - NANDI_TOYOTA_SALES_BANNERGHATTA.lng) < 0.0005;
+      if (
+        c.id === NANDI_TOYOTA_SALES_BANNERGHATTA.id ||
+        matchesSalesByCoords ||
+        nameNorm.includes("nandi toyota") &&
+          (nameNorm.includes("bannerghatta") ||
+            nameNorm.includes("sales bannerghatta"))
+      ) {
+        return {
+          ...c,
+          name: "Nandi Toyota - Sales - Bannerghatta Road",
+          brand: "TOYOTA",
+          aliases: Array.from(
+            new Set([
+              ...(c.aliases || []),
+              ...NANDI_TOYOTA_SALES_BANNERGHATTA.aliases,
+            ])
+          ),
         };
       }
       return { ...c, brand: normBrand };
@@ -393,6 +461,10 @@ export default function ServiceCenters() {
         ...((center.aliases || []).map((a) => normalizeForAlias(a)) || []),
         normalizeForAlias(center.name),
         normalizeForAlias(center.address),
+        // generic brand tokens to assist searches like "Toyota"
+        ...(String(center.brand || "")
+          ? [normalizeForAlias(center.brand)]
+          : []),
       ]);
       // If alias bag contains 'nandi toyota' variants and query looks like it, treat as match
       const aliasJoined = Array.from(aliasBag).join(" ");
@@ -494,20 +566,48 @@ export default function ServiceCenters() {
       return;
     }
 
-    // If the top result is our canonical Nandi Toyota and brand TOYOTA, ensure explicit recenter
+    // If the top result is a Nandi Toyota match and brand TOYOTA, ensure explicit recenter
     const top = filteredCenters[0];
-    if (
-      top &&
-      (top.id === NANDI_TOYOTA_CANON.id ||
-        normalizeForAlias(top.name).includes("nandi toyota")) &&
-      normalizeBrandLabel(appliedBrand) === "TOYOTA"
-    ) {
-      setMapState({
-        center: { lat: NANDI_TOYOTA_CANON.lat, lng: NANDI_TOYOTA_CANON.lng },
-        zoom: 15,
-        bbox: null,
-      });
-      return;
+    if (top && normalizeBrandLabel(appliedBrand) === "TOYOTA") {
+      const topName = normalizeForAlias(top.name);
+      if (
+        top.id === NANDI_TOYOTA_CANON.id ||
+        topName.includes("nandi toyota - tes")
+      ) {
+        setMapState({
+          center: { lat: NANDI_TOYOTA_CANON.lat, lng: NANDI_TOYOTA_CANON.lng },
+          zoom: 15,
+          bbox: null,
+        });
+        return;
+      }
+      if (
+        top.id === NANDI_TOYOTA_SALES_BANNERGHATTA.id ||
+        topName.includes("nandi toyota - sales - bannerghatta road") ||
+        (Math.abs(Number(top.lat) - NANDI_TOYOTA_SALES_BANNERGHATTA.lat) <
+          0.0005 &&
+          Math.abs(Number(top.lng) - NANDI_TOYOTA_SALES_BANNERGHATTA.lng) <
+            0.0005)
+      ) {
+        setMapState({
+          center: {
+            lat: NANDI_TOYOTA_SALES_BANNERGHATTA.lat,
+            lng: NANDI_TOYOTA_SALES_BANNERGHATTA.lng,
+          },
+          zoom: 15,
+          bbox: null,
+        });
+        return;
+      }
+      if (topName.includes("nandi toyota")) {
+        // generic fallback to the first Nandi Toyota result
+        setMapState({
+          center: { lat: top.lat, lng: top.lng },
+          zoom: 15,
+          bbox: null,
+        });
+        return;
+      }
     }
 
     if (filteredCenters.length === 1) {
@@ -595,11 +695,24 @@ export default function ServiceCenters() {
       qAlias.includes("nandi toyota service") ||
       qAlias.includes("nandi toyota tes");
     if (looksLikeNandiToyota && normalizeBrandLabel(brand) === "TOYOTA") {
-      setMapState({
-        center: { lat: NANDI_TOYOTA_CANON.lat, lng: NANDI_TOYOTA_CANON.lng },
-        zoom: 15,
-        bbox: null,
-      });
+      // Prefer to center on the most relevant match by proximity:
+      // If the query contains 'bannerghatta', use the Sales - Bannerghatta coords; else use TES coords.
+      if (qAlias.includes("bannerghatta")) {
+        setMapState({
+          center: {
+            lat: NANDI_TOYOTA_SALES_BANNERGHATTA.lat,
+            lng: NANDI_TOYOTA_SALES_BANNERGHATTA.lng,
+          },
+          zoom: 15,
+          bbox: null,
+        });
+      } else {
+        setMapState({
+          center: { lat: NANDI_TOYOTA_CANON.lat, lng: NANDI_TOYOTA_CANON.lng },
+          zoom: 15,
+          bbox: null,
+        });
+      }
     }
 
     // Sync URL immediately with applied values
