@@ -126,6 +126,13 @@ html, body, #root {
   transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
 }
 
+/* Utility to reserve space and reduce layout shifts when explicit width/height are unknown */
+.img-aspect-16x9 {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: auto;
+}
+
 .card:hover .hover-zoom,
 .hover-zoom:hover {
   transform: translateY(-2px) scale(1.02);

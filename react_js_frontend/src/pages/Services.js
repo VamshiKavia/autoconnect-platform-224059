@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "../api/client";
+import ResponsiveImage from "../components/ResponsiveImage";
 
 /**
 // PUBLIC_INTERFACE
@@ -118,20 +119,15 @@ export default function Services() {
               aria-labelledby={`${cat.key}-title`}
             >
               <figure style={{ margin: 0 }}>
-                <img
+                <ResponsiveImage
                   src={cat.img}
                   alt={cat.alt}
                   className="hover-zoom"
                   width={640}
                   height={360}
                   loading="lazy"
-                  style={{
-                    width: "100%",
-                    height: "auto",
-                    borderRadius: 8,
-                    objectFit: "contain",
-                    background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                  }}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  placeholder="/assets/placeholder-blur.png"
                 />
                 <figcaption className="sr-only" id={`${cat.key}-fig`}>
                   {cat.title}

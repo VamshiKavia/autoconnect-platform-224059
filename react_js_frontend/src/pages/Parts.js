@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "../api/client";
+import ResponsiveImage from "../components/ResponsiveImage";
 
 /**
 // PUBLIC_INTERFACE
@@ -133,20 +134,15 @@ export default function Parts() {
                    1) Copy final asset to public/assets (e.g., public/assets/wheels.png)
                    2) Update the src below to /assets/wheels.png
                    3) Adjust width/height if needed and keep alt text meaningful */}
-                <img
+                <ResponsiveImage
                   src={item.img}
                   alt={item.alt}
                   className="hover-zoom parts-img"
                   width={640}
                   height={360}
                   loading="lazy"
-                  style={{
-                    width: "100%",
-                    height: "auto",
-                    borderRadius: 8,
-                    objectFit: "contain",
-                    background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                  }}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  placeholder="/assets/placeholder-blur.png"
                 />
                 <figcaption className="sr-only">{item.title}</figcaption>
               </figure>

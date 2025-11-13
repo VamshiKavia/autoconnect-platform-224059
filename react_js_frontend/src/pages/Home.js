@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiHealth, getApiBase } from "../api/client";
+import ResponsiveImage from "../components/ResponsiveImage";
 
 /**
 // PUBLIC_INTERFACE
@@ -139,23 +140,17 @@ export default function Home() {
               padding: 8,
             }}
           >
-            {/* Use root-relative public path so it works in CRA and previews */}
-            <img
+            <ResponsiveImage
               src="/assets/launch-hero-19609795.png"
               alt="Ocean Motors Aerexa latest car model"
               className="hover-zoom"
-              style={{
-                width: "100%",
-                maxWidth: 640,
-                height: "auto",
-                borderRadius: 8,
-                objectFit: "contain",
-                display: "block",
-                background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-              }}
               width={640}
               height={360}
               loading="eager"
+              sizes="(max-width: 768px) 100vw, 640px"
+              // Optional tiny placeholder; falls back gracefully if not present
+              placeholder="/assets/placeholder-blur.png"
+              style={{ maxWidth: 640 }}
             />
           </div>
         </div>
@@ -174,20 +169,15 @@ export default function Home() {
             tabIndex={-1}
           >
             <figure style={{ margin: 0 }}>
-              <img
+              <ResponsiveImage
                 src={item.img}
                 alt={item.alt}
                 className="hover-zoom"
                 width={item.width}
                 height={item.height}
                 loading="lazy"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 8,
-                  objectFit: "contain",
-                  background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                }}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                placeholder="/assets/placeholder-blur.png"
               />
               <figcaption className="sr-only" aria-hidden="true">
                 {item.name}
