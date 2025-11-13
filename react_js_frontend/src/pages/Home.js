@@ -23,7 +23,74 @@ export default function Home() {
 
   return (
     <div className="container">
-      <h2 className="section-title">Latest Launches</h2>
+      {/* New Launch hero/card section */}
+      <section
+        className="card"
+        aria-labelledby="new-launch-heading"
+        style={{
+          padding: 0,
+          overflow: "hidden",
+          marginBottom: 16,
+          borderRadius: "var(--radius)",
+          background: "linear-gradient(180deg, var(--surface), #fff)",
+        }}
+      >
+        <div
+          className="row"
+          style={{
+            alignItems: "stretch",
+            gap: 0,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: "1 1 360px", padding: 16 }}>
+            <h2 id="new-launch-heading" className="section-title" style={{ marginBottom: 6 }}>
+              New Launch
+            </h2>
+            <div className="subtitle" style={{ marginBottom: 10 }}>
+              Introducing our latest model with refined aerodynamics and performance.
+            </div>
+            <p style={{ color: "var(--primary)", lineHeight: 1.6 }}>
+              Experience precision engineering, elegant minimalism, and cutting-edge driver
+              assistance. Built for efficiency and comfort, crafted for the road ahead.
+            </p>
+            <div style={{ height: 12 }} />
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <a className="btn" href="#latest-launch-details">Explore</a>
+              <a className="btn secondary" href="#latest-launch-details" aria-label="Learn more about the new launch">
+                Learn more
+              </a>
+            </div>
+          </div>
+          <div
+            style={{
+              flex: "1 1 420px",
+              minHeight: 220,
+              background: "var(--surface)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 8,
+            }}
+          >
+            <img
+              src="/assets/new-launch-car.png"
+              alt="Ocean Motors latest car model, silver, side profile"
+              loading="lazy"
+              decoding="async"
+              style={{
+                width: "100%",
+                height: "auto",
+                objectFit: "contain",
+                maxHeight: 320,
+                filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.12))",
+              }}
+            />
+          </div>
+        </div>
+      </section>
+
+      <h2 className="section-title" id="latest-launch-details">Latest Launches</h2>
       <p className="subtitle">Discover our newest models and innovations.</p>
 
       {/* Health status banner */}
