@@ -148,6 +148,14 @@ html, body, #root {
   opacity: 0; /* start hidden until animated */
 }
 
+/* Defensive class: if observer fails, we can force-visibility via class toggle */
+.force-visible,
+.force-visible.fade-in-up {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+
 /* Defensive: if an element contains an image, ensure the image itself is visible.
    Cards already have background and dimensions; this avoids perceived missing images if JS fails. */
 .fade-in-up img {

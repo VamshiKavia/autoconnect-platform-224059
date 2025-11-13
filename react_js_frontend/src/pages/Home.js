@@ -58,7 +58,7 @@ export default function Home() {
       name: "Aerexa",
       description: "Refined aerodynamics meet everyday efficiency.",
       // Use existing asset from attachments mapped under public/assets by deployment
-      img: "/assets/20251113_094539_vecteezy_modern-car-isolated-on-transparent-background-3d-rendering_19609795.png",
+      img: "/assets/launch-hero-19609795.png",
       alt: "Ocean Motors Aerexa in pearl white, side profile",
       width: 640,
       height: 360,
@@ -67,7 +67,7 @@ export default function Home() {
       id: "straton-sport",
       name: "Straton Sport",
       description: "Agile handling with a responsive powertrain.",
-      img: "/assets/20251113_111417_vecteezy_sport-car-isolated-on-transparent-background-3d-rendering_19763520.png",
+      img: "/assets/launch-sport-grey-19763520.png",
       alt: "Gray sport coupé on neutral background, front 3/4 angle",
       width: 640,
       height: 360,
@@ -76,7 +76,7 @@ export default function Home() {
       id: "azure-gt",
       name: "Azure GT",
       description: "Grand touring comfort with modern dynamics.",
-      img: "/assets/20251113_111423_vecteezy_sport-car-isolated-on-transparent-background-3d-rendering_19553326.png",
+      img: "/assets/launch-sport-blue-19553326.png",
       alt: "Blue grand tourer coupe on neutral background, side profile",
       width: 640,
       height: 360,
@@ -141,7 +141,7 @@ export default function Home() {
           >
             {/* Use root-relative public path so it works in CRA and previews */}
             <img
-              src="/assets/20251113_094539_vecteezy_modern-car-isolated-on-transparent-background-3d-rendering_19609795.png"
+              src="/assets/launch-hero-19609795.png"
               alt="Ocean Motors Aerexa latest car model"
               className="hover-zoom"
               style={{
@@ -169,7 +169,7 @@ export default function Home() {
         {latestLaunches.map((item, idx) => (
           <article
             key={item.id}
-            className="card launch-card fade-in-up"
+            className="card launch-card fade-in-up force-visible"
             style={{ animationDelay: `${idx * 100}ms` }}
             tabIndex={-1}
           >
