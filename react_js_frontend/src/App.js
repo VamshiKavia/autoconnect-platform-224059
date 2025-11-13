@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import "./theme.css";
 import Home from "./pages/Home";
@@ -19,8 +19,12 @@ import Profile from "./pages/Profile";
  * Requires being wrapped with <BrowserRouter> in index.js to provide routing context.
  */
 function App() {
+  // Initialize from persisted token so reloads stay authenticated
   const [authed, setAuthed] = useState(!!localStorage.getItem("access_token"));
   const navigate = useNavigate();
+
+  // Persisted token check memoized
+  const hasToken = useMemo(() => !!localStorage.getItem("access_token"), [authed]);
 
   useEffect(() => {
     // Keep authed state in sync with localStorage changes (e.g., other tabs)
@@ -28,6 +32,14 @@ function App() {
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
   }, []);
+
+  // On mount, route users based on auth state if they land on root
+  useEffect(() => {
+    if (window.location.pathname === "/") {
+      // If not authenticated, go to /auth; otherwise ensure Home
+      navigate(hasToken ? "/" : "/auth", { replace: true });
+    }
+  }, [hasToken, navigate]);
 
   const onLogout = () => {
     localStorage.removeItem("access_token");
@@ -58,9 +70,35 @@ function App() {
 
       <main className="main">
         <Routes>
-          {/* Make /auth the primary entry point when not authenticated */}
-          <Route path="/" element={<Home />} />
-          <Route path="/auth" element={<Auth onLogin={() => { setAuthed(true); navigate("/", { replace: true }); }} />} />
+          {/* Root path: redirect based on auth state */}
+          <Route
+            path="/"
+            element={
+              authed ? (
+                <Home />
+              ) : (
+                <Navigate to="/auth" replace />
+              )
+            }
+          />
+          {/* Public auth route - if already authed, go Home */}
+          <Route
+            path="/auth"
+            element={
+              authed ? (
+                <Navigate to="/" replace />
+              ) : (
+                <Auth
+                  onLogin={() => {
+                    setAuthed(true);
+                    // After successful authentication go to Home
+                    navigate("/", { replace: true });
+                  }}
+                />
+              )
+            }
+          />
+          {/* Protected application routes */}
           <Route
             path="/services"
             element={
@@ -93,7 +131,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          {/* Fallback to /auth if route not found */}
+          {/* Fallback to /auth if route not found and not authed; otherwise Home */}
           <Route path="*" element={<Navigate to={authed ? "/" : "/auth"} replace />} />
         </Routes>
       </main>
