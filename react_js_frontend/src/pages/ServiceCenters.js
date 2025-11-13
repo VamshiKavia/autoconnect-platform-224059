@@ -25,14 +25,15 @@ export default function ServiceCenters() {
   const DEFAULT_RADIUS_KM = 20;
 
   // Allowed brand options per requirement (single-select dropdown)
+  // Note: value is the normalized brand token used for filtering; label is for display
   const BRAND_OPTIONS = [
     { value: "all", label: "All brands" },
     { value: "HYUNDAI", label: "HYUNDAI" },
-    { value: "TOYATO", label: "TOYATO" }, // note: spelled as provided
+    { value: "TOYOTA", label: "TOYOTA" }, // corrected label/value
     { value: "SUZUKI", label: "SUZUKI" },
     { value: "BMW", label: "BMW" },
     { value: "AUDI", label: "AUDI" },
-    { value: "BENZ", label: "BENZ" },
+    { value: "MERCEDES-BENZ", label: "MERCEDES-BENZ" }, // corrected label/value
   ];
 
   // UI state
@@ -131,6 +132,15 @@ export default function ServiceCenters() {
   // Derived filtered list (client-side for type/brand and q safety)
   const filteredCenters = useMemo(() => {
     const qLower = q.trim().toLowerCase();
+
+    // Map legacy/alternate brand tokens to normalized values
+    const normalizeBrand = (b) => {
+      const t = (b || "").toUpperCase().trim();
+      if (t === "TOYATO") return "TOYOTA";
+      if (t === "BENZ") return "MERCEDES-BENZ";
+      return t;
+    };
+
     let list = centers.filter((c) => {
       const matchesQ =
         !qLower ||
@@ -144,10 +154,11 @@ export default function ServiceCenters() {
         (type === "authorized" && isAuthorized) ||
         (type === "multi-brand" && !isAuthorized);
 
-      // Brand filter: if All, accept all; otherwise match our inferred brand OR backend-provided c.brand if present
+      // Brand filter: if All, accept all; otherwise match inferred/backend brand normalized
       const inferred = inferBrand(c.id);
-      const centerBrand = (c.brand || inferred || "").toUpperCase();
-      const brandOk = brand === "all" || centerBrand === brand;
+      const centerBrand = normalizeBrand(c.brand || inferred || "");
+      const selectedBrand = normalizeBrand(brand);
+      const brandOk = selectedBrand === "ALL" || centerBrand === selectedBrand;
 
       return matchesQ && typeOk && brandOk;
     });
@@ -259,7 +270,13 @@ export default function ServiceCenters() {
           {filteredCenters.map((c) => {
             const isSelected = c.id === selectedId;
             // Determine display brand for the card (to help users see which brand matched)
-            const displayBrand = (c.brand || inferBrand(c.id) || "").toUpperCase();
+            const displayBrandRaw = (c.brand || inferBrand(c.id) || "").toUpperCase();
+            const displayBrand =
+              displayBrandRaw === "TOYATO"
+                ? "TOYOTA"
+                : displayBrandRaw === "BENZ"
+                ? "MERCEDES-BENZ"
+                : displayBrandRaw;
 
             return (
               <div
