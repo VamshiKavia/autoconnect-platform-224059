@@ -16,7 +16,8 @@ export default function Home() {
   useEffect(() => {
     const elements = Array.from(document.querySelectorAll(".fade-in-up"));
     // Respect reduced motion: make visible immediately
-    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion =
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (reduceMotion) {
       elements.forEach((el) => el.classList.add("is-visible"));
@@ -49,28 +50,36 @@ export default function Home() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Data for Latest Launches grid (include existing hero image and two new attachments)
+  // Data for Latest Launches grid
+  // Normalize all images to use public root-relative paths under /assets and provide width/height
   const latestLaunches = [
     {
-      id: "vertesa",
-      name: "Vertesa",
+      id: "aerexa", // renamed per request from "Vertesa"
+      name: "Aerexa",
       description: "Refined aerodynamics meet everyday efficiency.",
-      img: "/assets/new-launch-car.png",
-      alt: "Ocean Motors Vertesa in pearl white, side profile",
+      // Use existing asset from attachments mapped under public/assets by deployment
+      img: "/assets/20251113_094539_vecteezy_modern-car-isolated-on-transparent-background-3d-rendering_19609795.png",
+      alt: "Ocean Motors Aerexa in pearl white, side profile",
+      width: 640,
+      height: 360,
     },
     {
       id: "straton-sport",
       name: "Straton Sport",
       description: "Agile handling with a responsive powertrain.",
-      img: "/assets/launch-sport-grey-19763520.png",
+      img: "/assets/20251113_111417_vecteezy_sport-car-isolated-on-transparent-background-3d-rendering_19763520.png",
       alt: "Gray sport coupé on neutral background, front 3/4 angle",
+      width: 640,
+      height: 360,
     },
     {
       id: "azure-gt",
       name: "Azure GT",
       description: "Grand touring comfort with modern dynamics.",
-      img: "/assets/launch-sport-blue-19553326.png",
+      img: "/assets/20251113_111423_vecteezy_sport-car-isolated-on-transparent-background-3d-rendering_19553326.png",
       alt: "Blue grand tourer coupe on neutral background, side profile",
+      width: 640,
+      height: 360,
     },
   ];
 
@@ -98,7 +107,7 @@ export default function Home() {
         >
           <div className="center-col vcenter-col" style={{ flex: "1 1 360px", padding: 16 }}>
             <h2 id="new-launch-heading" className="section-title" style={{ marginBottom: 6 }}>
-              New Launch | Vertesa
+              New Launch | Aerexa
             </h2>
             <div className="subtitle" style={{ marginBottom: 10 }}>
               Introducing our latest model with refined aerodynamics and performance.
@@ -110,7 +119,11 @@ export default function Home() {
             <div style={{ height: 12 }} />
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <a className="btn" href="#latest-launch-details">Explore</a>
-              <a className="btn secondary" href="#latest-launch-details" aria-label="Learn more about the new launch">
+              <a
+                className="btn secondary"
+                href="#latest-launch-details"
+                aria-label="Learn more about the new launch"
+              >
                 Learn more
               </a>
             </div>
@@ -128,8 +141,8 @@ export default function Home() {
           >
             {/* Use root-relative public path so it works in CRA and previews */}
             <img
-              src="/assets/new-launch-car.png"
-              alt="Ocean Motors latest car model"
+              src="/assets/20251113_094539_vecteezy_modern-car-isolated-on-transparent-background-3d-rendering_19609795.png"
+              alt="Ocean Motors Aerexa latest car model"
               className="hover-zoom"
               style={{
                 width: "100%",
@@ -141,8 +154,8 @@ export default function Home() {
                 background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
               }}
               width={640}
-              height={220}
-              loading="lazy"
+              height={360}
+              loading="eager"
             />
           </div>
         </div>
@@ -165,8 +178,8 @@ export default function Home() {
                 src={item.img}
                 alt={item.alt}
                 className="hover-zoom"
-                width={640}
-                height={360}
+                width={item.width}
+                height={item.height}
                 loading="lazy"
                 style={{
                   width: "100%",

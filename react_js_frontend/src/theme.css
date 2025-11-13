@@ -148,6 +148,12 @@ html, body, #root {
   opacity: 0; /* start hidden until animated */
 }
 
+/* Defensive: if an element contains an image, ensure the image itself is visible.
+   Cards already have background and dimensions; this avoids perceived missing images if JS fails. */
+.fade-in-up img {
+  display: block;
+}
+
 .fade-in-up.is-visible {
   animation: fadeInUp 500ms ease forwards;
 }
