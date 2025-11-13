@@ -56,8 +56,8 @@ export default function Parts() {
       key: "wheels",
       title: "Wheels",
       description: "Durable alloy and steel wheel options engineered for stability and comfort.",
-      // Using general service banner to represent wheels and maintenance visuals
-      img: "/assets/close-up-hands-unrecognizable-mechanic-doing-car-service-maintenance.jpg",
+      // Updated to use existing Car Engine asset as requested
+      img: "/assets/29765.jpg",
       alt: "Close-up of mechanic's hands working on a car wheel during service",
       specs: ["Sizes: 15\"–20\"", "Bolt patterns: 4–5 lug", "Finish: Gloss / Matte"],
     },
