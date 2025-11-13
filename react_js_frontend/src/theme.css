@@ -109,6 +109,93 @@ html, body, #root {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
+  transition: box-shadow 200ms ease, transform 200ms ease, background-color 200ms ease, border-color 200ms ease;
+}
+
+/* Subtle card elevation on hover/focus within */
+.card:focus-within {
+  outline: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+}
+
+/* Simple hover zoom for images inside card */
+.hover-zoom {
+  display: block;
+  border-radius: 8px;
+  will-change: transform;
+  transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
+}
+
+.card:hover .hover-zoom,
+.hover-zoom:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+}
+
+/* Fade-in and slide-up animation utility */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  opacity: 0; /* start hidden until animated */
+}
+
+.fade-in-up.is-visible {
+  animation: fadeInUp 500ms ease forwards;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .hover-zoom,
+  .card {
+    transition: none !important;
+  }
+  .fade-in-up,
+  .fade-in-up.is-visible {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Responsive grid helpers for launch cards */
+.launch-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+
+.launch-card {
+  grid-column: span 4;
+}
+
+@media (max-width: 1024px) {
+  .launch-card {
+    grid-column: span 6;
+  }
+}
+@media (max-width: 640px) {
+  .launch-card {
+    grid-column: span 12;
+  }
+}
+
+/* Accessible button focus style refinement */
+.btn:focus-visible,
+.nav-link:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #60A5FA; /* sky-400 */
+  outline-offset: 2px;
+  border-color: #93C5FD;
 }
 
 .section-title {
@@ -121,6 +208,19 @@ html, body, #root {
   color: var(--muted);
   font-size: 14px;
   margin-bottom: 16px;
+}
+
+/* Screen reader only helper */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 .input {

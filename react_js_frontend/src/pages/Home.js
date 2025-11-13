@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiGet, apiHealth, getApiBase } from "../api/client";
 
 /**
@@ -11,6 +11,34 @@ export default function Home() {
   const [health, setHealth] = useState({ ok: null, status: null, error: "" });
   const [error, setError] = useState("");
 
+  // IntersectionObserver to add 'is-visible' on scroll for .fade-in-up elements
+  const ioRef = useRef(null);
+  useEffect(() => {
+    const elements = Array.from(document.querySelectorAll(".fade-in-up"));
+    // Respect reduced motion: make visible immediately
+    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reduceMotion) {
+      elements.forEach((el) => el.classList.add("is-visible"));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
+    );
+    elements.forEach((el) => observer.observe(el));
+    ioRef.current = observer;
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     // Kick off healthcheck in parallel
     apiHealth().then((h) => setHealth(h));
@@ -20,6 +48,31 @@ export default function Home() {
       .catch((e) => setError(e?.message || "Failed to load cars"))
       .finally(() => setLoading(false));
   }, []);
+
+  // Data for Latest Launches grid (include existing hero image and two new attachments)
+  const latestLaunches = [
+    {
+      id: "vertesa",
+      name: "Vertesa",
+      description: "Refined aerodynamics meet everyday efficiency.",
+      img: "/assets/new-launch-car.png",
+      alt: "Ocean Motors Vertesa in pearl white, side profile",
+    },
+    {
+      id: "straton-sport",
+      name: "Straton Sport",
+      description: "Agile handling with a responsive powertrain.",
+      img: "/assets/launch-sport-grey-19763520.png",
+      alt: "Gray sport coupé on neutral background, front 3/4 angle",
+    },
+    {
+      id: "azure-gt",
+      name: "Azure GT",
+      description: "Grand touring comfort with modern dynamics.",
+      img: "/assets/launch-sport-blue-19553326.png",
+      alt: "Blue grand tourer coupe on neutral background, side profile",
+    },
+  ];
 
   return (
     <div className="container">
@@ -77,6 +130,7 @@ export default function Home() {
             <img
               src="/assets/new-launch-car.png"
               alt="Ocean Motors latest car model"
+              className="hover-zoom"
               style={{
                 width: "100%",
                 maxWidth: 640,
@@ -96,6 +150,53 @@ export default function Home() {
 
       <h2 className="section-title" id="latest-launch-details">Latest Launches</h2>
       <p className="subtitle">Discover our newest models and innovations.</p>
+
+      {/* Latest Launches Grid (cards with subtle animations) */}
+      <section className="launch-grid" aria-label="Latest launches cards" style={{ marginBottom: 16 }}>
+        {latestLaunches.map((item, idx) => (
+          <article
+            key={item.id}
+            className="card launch-card fade-in-up"
+            style={{ animationDelay: `${idx * 100}ms` }}
+            tabIndex={-1}
+          >
+            <figure style={{ margin: 0 }}>
+              <img
+                src={item.img}
+                alt={item.alt}
+                className="hover-zoom"
+                width={640}
+                height={360}
+                loading="lazy"
+                style={{
+                  width: "100%",
+                  height: "auto",
+                  borderRadius: 8,
+                  objectFit: "contain",
+                  background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
+                }}
+              />
+              <figcaption className="sr-only" aria-hidden="true">
+                {item.name}
+              </figcaption>
+            </figure>
+            <div style={{ height: 12 }} />
+            <h3 className="section-title" style={{ marginBottom: 4 }}>{item.name}</h3>
+            <p className="subtitle" style={{ marginBottom: 12 }}>{item.description}</p>
+            <button
+              className="btn"
+              aria-label={`View details for ${item.name}`}
+              onClick={() => {
+                // Placeholder CTA action — in a full app this would navigate
+                // to a model details page or open a modal
+                alert(`${item.name} details coming soon`);
+              }}
+            >
+              View Details
+            </button>
+          </article>
+        ))}
+      </section>
 
       {/* Health status banner */}
       <div className="card" style={{ marginBottom: 12 }}>
