@@ -5,14 +5,14 @@ import { apiGet } from "../api/client";
 // PUBLIC_INTERFACE
  * ServiceCenters - Find service centers with map, filters, and geolocation sorting.
  *
- * Update: Introduce explicit Search button to apply filters. Inputs remain controlled,
- * URL preview keeps syncing (debounced for q), but actual filtering/map recenter only
- * happen on Search button click or Enter key submit.
+ * Update: Ensure robust string matching and brand normalization, explicit Search button
+ * applies filters, and map recenters on top match or fits bounds for multiple matches.
+ * Adds minimal dev logging for filtered results.
  *
- * Behaviors preserved:
- * - Fullscreen toggle, geolocation fallback (ISRO Layout), and friendly no-match message
- * - URL q and brand sync on submit
- * - Accessibility: Enter key submission and Search button with aria-label
+ * Verification targets:
+ * - q='Nandi Toyota Service', brand='TOYOTA' -> shows "Nandi Toyota Service" and recenters
+ * - q='Nandi', brand='TOYOTA' -> shows correct matches and recenters
+ * - q='Toyota Service', brand='TOYOTA' -> matches and recenter
  */
 export default function ServiceCenters() {
   // ISRO Layout default center
@@ -80,10 +80,10 @@ export default function ServiceCenters() {
   // Normalize brand coming from URL or UI to internal values
   const normalizeBrandFromUrl = (b) => {
     if (!b) return "all";
-    const t = String(b).trim().toUpperCase();
-    if (t === "ALL") return "all";
-    if (t === "TOYATO") return "TOYOTA";
-    if (t === "BENZ") return "MERCEDES-BENZ";
+    const t = decodeURIComponent(String(b)).replace(/\+/g, " ").trim().toUpperCase();
+    if (t === "ALL" || t === "ALL BRANDS") return "all";
+    if (t === "TOYATO" || t === "TOY-OTA" || t === "TOY OTA") return "TOYOTA";
+    if (t === "BENZ" || t === "MERCEDES" || t === "MERCEDES BENZ") return "MERCEDES-BENZ";
     // Only allow known brands; otherwise fall back to "all"
     const allowed = BRAND_OPTIONS.map((o) => o.value);
     return allowed.includes(t) ? t : "all";
@@ -150,7 +150,8 @@ export default function ServiceCenters() {
 
     // brand param: omit when 'all'
     if (brand && brand !== "all") {
-      sp.set("brand", encodeURIComponent(brand).replace(/%20/g, "+"));
+      // Avoid double-encoding; store raw uppercase with hyphens
+      sp.set("brand", brand);
     } else {
       sp.delete("brand");
     }
@@ -221,7 +222,7 @@ export default function ServiceCenters() {
       try {
         const loc = userLoc || DEFAULT_CENTER;
         const data = await loadCenters({
-          q: "", // initial no query
+          q: "", // initial no query so we load broad set then filter client-side
           lat: loc.lat,
           lng: loc.lng,
           radius_km: DEFAULT_RADIUS_KM,
@@ -253,27 +254,43 @@ export default function ServiceCenters() {
     return brands[sum % brands.length];
   };
 
+  // Normalize brand labels inside filtering
+  const normalizeBrandLabel = (b) => {
+    if (!b) return "";
+    const t = String(b).toUpperCase().trim().replace(/\s+/g, " ");
+    if (t === "TOYATO" || t === "TOY-OTA" || t === "TOY OTA") return "TOYOTA";
+    if (t === "MERCEDES" || t === "MERCEDES BENZ" || t === "BENZ") return "MERCEDES-BENZ";
+    return t;
+  };
+
+  // Tokenize and also allow substring matching for query terms
+  const buildQueryMatcher = (raw) => {
+    const qLower = (raw || "").trim().toLowerCase();
+    if (!qLower) return () => true;
+
+    const tokens = qLower.split(/\s+/).filter(Boolean);
+    return (text) => {
+      const hay = (text || "").toLowerCase();
+      // all tokens should be found as substrings somewhere in the combined fields
+      return tokens.every((tk) => hay.includes(tk));
+    };
+  };
+
   // Derived filtered list (client-side) based on APPLIED values only
   const filteredCenters = useMemo(() => {
-    const qLower = (appliedQ || "").trim().toLowerCase();
-
-    const normalizeBrand = (b) => {
-      const t = (b || "").toUpperCase().trim();
-      if (t === "TOYATO") return "TOYOTA";
-      if (t === "BENZ") return "MERCEDES-BENZ";
-      return t;
-    };
+    const qMatch = buildQueryMatcher(appliedQ);
 
     let list = centers.filter((c) => {
-      const matchesQ =
-        !qLower ||
-        (c.name || "").toLowerCase().includes(qLower) ||
-        (c.address || "").toLowerCase().includes(qLower);
+      // Combine fields for query matching (name + address)
+      const composite = `${c.name || ""} ${c.address || ""}`;
+      const matchesQ = qMatch(composite);
 
       const inferred = inferBrand(c.id);
-      const centerBrand = normalizeBrand(c.brand || inferred || "");
-      const selectedBrand = normalizeBrand(appliedBrand);
+      const centerBrand = normalizeBrandLabel(c.brand || inferred || "");
+      const selectedBrand = normalizeBrandLabel(appliedBrand);
+
       const brandOk =
+        selectedBrand === "" ||
         selectedBrand === "ALL" ||
         selectedBrand === "ALL BRANDS" ||
         appliedBrand === "all" ||
@@ -292,6 +309,17 @@ export default function ServiceCenters() {
 
     // Sort by distance from origin
     list.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
+
+    // Minimal dev logging (safe, no PII) to verify filtered size
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.debug("[ServiceCenters] filtered", {
+        q: appliedQ,
+        brand: appliedBrand,
+        count: list.length,
+      });
+    }
+
     return list;
   }, [centers, appliedQ, appliedBrand, userLoc?.lat, userLoc?.lng]);
 
@@ -420,8 +448,7 @@ export default function ServiceCenters() {
     const sp = new URLSearchParams();
     const qVal = q.trim();
     if (qVal) sp.set("q", qVal);
-    if (brand && brand !== "all")
-      sp.set("brand", encodeURIComponent(brand).replace(/%20/g, "+"));
+    if (brand && brand !== "all") sp.set("brand", brand);
     const newSearch = sp.toString();
     const newUrl =
       window.location.pathname + (newSearch ? `?${newSearch}` : "");
@@ -455,7 +482,7 @@ export default function ServiceCenters() {
               className="input"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name or address"
+              placeholder="Search by name or address (e.g., Nandi Toyota Service)"
               aria-label="Search service centers by name or address"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
