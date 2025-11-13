@@ -187,6 +187,35 @@ describe("ServiceCenters - explicit Search apply behavior", () => {
     expect(srcAfter).not.toEqual(srcBefore);
   });
 
+  test("search 'Nandi Toyota Service' with brand TOYOTA shows matching centers and updates map", async () => {
+    renderAt("/centers");
+    expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();
+
+    const input = getSearchInput();
+    const brandSelect = getBrandSelect();
+
+    // Type full query
+    fireEvent.change(input, { target: { value: "Nandi Toyota Service" } });
+    await act(async () => jest.advanceTimersByTime(320));
+    // Select TOYOTA brand
+    fireEvent.change(brandSelect, { target: { value: "TOYOTA" } });
+
+    // Capture map before apply
+    const srcBefore = getMapIframe().getAttribute("src");
+
+    // Click Search to apply
+    fireEvent.click(getSearchButton());
+
+    // Expect Nandi Toyota Service card present
+    expect(await screen.findByText(/Nandi Toyota Service/i)).toBeInTheDocument();
+
+    // Map should update (marker centered to top match)
+    const srcAfter = getMapIframe().getAttribute("src");
+    expect(srcAfter).toBeTruthy();
+    expect(srcAfter).not.toEqual(srcBefore);
+    expect(srcAfter).toMatch(/marker=/);
+  });
+
   test("Search button disabled when inputs are empty or unchanged", async () => {
     renderAt("/centers");
     expect(await screen.findByText(/Service Centers/i)).toBeInTheDocument();

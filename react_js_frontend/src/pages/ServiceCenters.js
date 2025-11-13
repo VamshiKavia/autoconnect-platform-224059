@@ -16,7 +16,7 @@ import { apiGet } from "../api/client";
  */
 export default function ServiceCenters() {
   // ISRO Layout default center
-  const DEFAULT_CENTER = { lat: 12.9022, lng: 77.5660 };
+  const DEFAULT_CENTER = { lat: 12.9022, lng: 77.566 };
   const DEFAULT_RADIUS_KM = 20;
 
   // Allowed brand options (single-select dropdown)
@@ -77,14 +77,15 @@ export default function ServiceCenters() {
 
   // --- URL <-> State Sync Helpers ---
 
-  // Normalize brand coming from URL or UI to internal values
+  // Normalize brand coming from URL or UI to internal values with aliases
   const normalizeBrandFromUrl = (b) => {
     if (!b) return "all";
     const t = decodeURIComponent(String(b)).replace(/\+/g, " ").trim().toUpperCase();
     if (t === "ALL" || t === "ALL BRANDS") return "all";
-    if (t === "TOYATO" || t === "TOY-OTA" || t === "TOY OTA") return "TOYOTA";
-    if (t === "BENZ" || t === "MERCEDES" || t === "MERCEDES BENZ") return "MERCEDES-BENZ";
-    // Only allow known brands; otherwise fall back to "all"
+    // Common aliases/punctuation variants
+    const cleaned = t.replace(/[^\w\s-]/g, "").replace(/\s+/g, " ");
+    if (["TOYATO", "TOY-OTA", "TOY OTA", "TOYOTA MOTOR"].includes(cleaned)) return "TOYOTA";
+    if (["BENZ", "MERCEDES", "MERCEDES BENZ"].includes(cleaned)) return "MERCEDES-BENZ";
     const allowed = BRAND_OPTIONS.map((o) => o.value);
     return allowed.includes(t) ? t : "all";
   };
@@ -94,7 +95,14 @@ export default function ServiceCenters() {
     const applyFromLocation = (applyToInputsOnly = true) => {
       try {
         const sp = new URLSearchParams(window.location.search);
-        const qParam = sp.get("q") || "";
+        const rawQ = sp.get("q") || "";
+        // Normalize q: trim, collapse spaces, remove zero-width and control chars
+        const qParam = rawQ
+          .normalize("NFKC")
+          .replace(/[​-‍﻿]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
         const brandParamRaw = sp.get("brand");
         const brandParam = normalizeBrandFromUrl(brandParamRaw);
 
@@ -141,7 +149,11 @@ export default function ServiceCenters() {
     const sp = new URLSearchParams(window.location.search);
 
     // q param: set only if non-empty; else remove
-    const qVal = debouncedQ.trim();
+    const qVal = debouncedQ
+      .normalize("NFKC")
+      .replace(/[​-‍﻿]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
     if (qVal) {
       sp.set("q", qVal);
     } else {
@@ -150,15 +162,13 @@ export default function ServiceCenters() {
 
     // brand param: omit when 'all'
     if (brand && brand !== "all") {
-      // Avoid double-encoding; store raw uppercase with hyphens
       sp.set("brand", brand);
     } else {
       sp.delete("brand");
     }
 
     const newSearch = sp.toString();
-    const newUrl =
-      window.location.pathname + (newSearch ? `?${newSearch}` : "");
+    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "");
 
     try {
       window.history.replaceState(null, "", newUrl);
@@ -221,8 +231,11 @@ export default function ServiceCenters() {
       setError("");
       try {
         const loc = userLoc || DEFAULT_CENTER;
+        // Try server-side search lightly when a URL-specified query exists at mount
+        const initialQ =
+          (didInitFromUrl.current ? (appliedQ || "") : "").trim();
         const data = await loadCenters({
-          q: "", // initial no query so we load broad set then filter client-side
+          q: initialQ || "",
           lat: loc.lat,
           lng: loc.lng,
           radius_km: DEFAULT_RADIUS_KM,
@@ -258,20 +271,38 @@ export default function ServiceCenters() {
   const normalizeBrandLabel = (b) => {
     if (!b) return "";
     const t = String(b).toUpperCase().trim().replace(/\s+/g, " ");
-    if (t === "TOYATO" || t === "TOY-OTA" || t === "TOY OTA") return "TOYOTA";
+    if (t === "TOYATO" || t === "TOY-OTA" || t === "TOY OTA" || t === "TOYOTA MOTOR")
+      return "TOYOTA";
     if (t === "MERCEDES" || t === "MERCEDES BENZ" || t === "BENZ") return "MERCEDES-BENZ";
     return t;
   };
 
-  // Tokenize and also allow substring matching for query terms
-  const buildQueryMatcher = (raw) => {
-    const qLower = (raw || "").trim().toLowerCase();
-    if (!qLower) return () => true;
+  // Build combined haystack from name/address and normalize whitespace/unicode/punctuation
+  const toHaystack = (c) => {
+    const combined = `${c.name || ""} ${c.address || ""}`
+      .normalize("NFKC")
+      .replace(/[​-‍﻿]/g, "")
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return combined;
+  };
 
-    const tokens = qLower.split(/\s+/).filter(Boolean);
-    return (text) => {
-      const hay = (text || "").toLowerCase();
-      // all tokens should be found as substrings somewhere in the combined fields
+  // Tokenize and also allow substring matching for query terms (AND all tokens)
+  const buildQueryMatcher = (raw) => {
+    const qNorm = (raw || "")
+      .normalize("NFKC")
+      .replace(/[​-‍﻿]/g, "")
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    if (!qNorm) return () => true;
+
+    const tokens = qNorm.split(/\s+/).filter(Boolean);
+    return (center) => {
+      const hay = toHaystack(center);
       return tokens.every((tk) => hay.includes(tk));
     };
   };
@@ -281,9 +312,7 @@ export default function ServiceCenters() {
     const qMatch = buildQueryMatcher(appliedQ);
 
     let list = centers.filter((c) => {
-      // Combine fields for query matching (name + address)
-      const composite = `${c.name || ""} ${c.address || ""}`;
-      const matchesQ = qMatch(composite);
+      const matchesQ = qMatch(c);
 
       const inferred = inferBrand(c.id);
       const centerBrand = normalizeBrandLabel(c.brand || inferred || "");
@@ -310,7 +339,6 @@ export default function ServiceCenters() {
     // Sort by distance from origin
     list.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
 
-    // Minimal dev logging (safe, no PII) to verify filtered size
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.debug("[ServiceCenters] filtered", {
@@ -441,17 +469,20 @@ export default function ServiceCenters() {
   const onSubmit = (e) => {
     e.preventDefault();
     // Apply current inputs
-    setAppliedQ(q.trim());
+    const qApplied = q
+      .normalize("NFKC")
+      .replace(/[​-‍﻿]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    setAppliedQ(qApplied);
     setAppliedBrand(brand);
 
     // Sync URL immediately with applied values
     const sp = new URLSearchParams();
-    const qVal = q.trim();
-    if (qVal) sp.set("q", qVal);
+    if (qApplied) sp.set("q", qApplied);
     if (brand && brand !== "all") sp.set("brand", brand);
     const newSearch = sp.toString();
-    const newUrl =
-      window.location.pathname + (newSearch ? `?${newSearch}` : "");
+    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "");
     try {
       window.history.replaceState(null, "", newUrl);
     } catch {
@@ -461,8 +492,12 @@ export default function ServiceCenters() {
 
   // Disable Search button when both empty OR unchanged vs applied
   const isUnchanged =
-    q.trim() === (appliedQ || "").trim() && (brand || "all") === (appliedBrand || "all");
-  const isEmpty = q.trim() === "" && (brand || "all") === "all";
+    q.normalize("NFKC").replace(/[​-‍﻿]/g, "").replace(/\s+/g, " ").trim() ===
+      (appliedQ || "") &&
+    (brand || "all") === (appliedBrand || "all");
+  const isEmpty =
+    q.normalize("NFKC").replace(/[​-‍﻿]/g, "").replace(/\s+/g, " ").trim() === "" &&
+    (brand || "all") === "all";
   const disableSearch = isEmpty || isUnchanged;
 
   return (
@@ -473,15 +508,27 @@ export default function ServiceCenters() {
       </p>
 
       {/* Filters with explicit Search submit */}
-      <form className="card" style={{ marginBottom: 12 }} onSubmit={onSubmit} role="search" aria-label="Service centers search">
+      <form
+        className="card"
+        style={{ marginBottom: 12 }}
+        onSubmit={onSubmit}
+        role="search"
+        aria-label="Service centers search"
+      >
         <div className="row" style={{ flexWrap: "wrap", alignItems: "stretch" }}>
           <div style={{ flex: "1 1 240px", minWidth: 200 }}>
-            <label className="label" htmlFor="q">Search</label>
+            <label className="label" htmlFor="q">
+              Search
+            </label>
             <input
               id="q"
               className="input"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => setQ(
+                e.target.value
+                  .normalize("NFKC")
+                  .replace(/[​-‍﻿]/g, "")
+              )}
               placeholder="Search by name or address (e.g., Nandi Toyota Service)"
               aria-label="Search service centers by name or address"
               onKeyDown={(e) => {
@@ -492,7 +539,9 @@ export default function ServiceCenters() {
             />
           </div>
           <div style={{ flex: "0 1 200px", minWidth: 180 }}>
-            <label className="label" htmlFor="brand">Brand</label>
+            <label className="label" htmlFor="brand">
+              Brand
+            </label>
             <select
               id="brand"
               className="input"
@@ -501,7 +550,9 @@ export default function ServiceCenters() {
               aria-label="Filter by Brand"
             >
               {BRAND_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
               ))}
             </select>
           </div>
@@ -522,9 +573,7 @@ export default function ServiceCenters() {
       {/* Map with fullscreen toggle */}
       <div
         ref={mapContainerRef}
-        className={
-          "card map-card " + (isFullscreen ? "fullscreen-overlay" : "")
-        }
+        className={"card map-card " + (isFullscreen ? "fullscreen-overlay" : "")}
         style={{ marginBottom: 16 }}
         aria-label="Map container"
       >
@@ -553,7 +602,7 @@ export default function ServiceCenters() {
 
         <iframe
           title="Service Centers Map"
-          src={osmUrl}
+          src={buildOsmUrl()}
           className="map-embed"
           aria-label="Map showing service centers around selected area"
           style={
