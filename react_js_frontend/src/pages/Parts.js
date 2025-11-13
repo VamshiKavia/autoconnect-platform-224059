@@ -82,7 +82,7 @@ export default function Parts() {
       key: "head-lights",
       title: "Head Lights",
       description: "High-visibility LED and HID assemblies with improved beam patterns.",
-      img: "/assets/fe078699-e9e5-4446-80b1-1252a61b6d00.jpg",
+      img: "/assets/placeholder-magwheels.png",
       alt: "Close-up of a modern car headlight assembly illuminated",
       specs: ["LED/HID options", "Plug-and-play fit", "ECE/DOT compliant"],
     },
