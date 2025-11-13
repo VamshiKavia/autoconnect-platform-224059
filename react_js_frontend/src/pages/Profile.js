@@ -47,7 +47,7 @@ export default function Profile() {
   if (!profile) {
     return (
       <div className="container">
-        <div className="card">Sign in to view your profile.</div>
+        <div className="card">Please sign in from the Auth page to view your profile.</div>
       </div>
     );
   }

@@ -73,19 +73,23 @@ export default function Home() {
               padding: 8,
             }}
           >
-            <img
-              src="/assets/new-launch-car.png"
-              alt="Ocean Motors latest car model, silver, side profile"
-              loading="lazy"
-              decoding="async"
+            <div
+              role="img"
+              aria-label="Ocean Motors latest car model"
               style={{
                 width: "100%",
-                height: "auto",
-                objectFit: "contain",
-                maxHeight: 320,
-                filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.12))",
+                height: 220,
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--muted)",
+                fontWeight: 600,
               }}
-            />
+            >
+              Image Placeholder
+            </div>
           </div>
         </div>
       </section>

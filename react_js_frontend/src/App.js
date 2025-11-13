@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Routes, Route } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import "./theme.css";
 import Home from "./pages/Home";
 import Services from "./pages/Services";
@@ -12,19 +12,28 @@ import Profile from "./pages/Profile";
 // PUBLIC_INTERFACE
  * App - Application shell with navigation and route definitions.
  * 
- * Uses react-router-dom v6:
- * - NavLink for navigation with active styling
- * - Routes/Route for route configuration
+ * Uses react-router-dom v6 with a simple auth guard:
+ * - ProtectedRoute redirects unauthenticated users to /auth
+ * - After successful login/register, user is redirected to Home
  * 
  * Requires being wrapped with <BrowserRouter> in index.js to provide routing context.
  */
 function App() {
   const [authed, setAuthed] = useState(!!localStorage.getItem("access_token"));
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Keep authed state in sync with localStorage changes (e.g., other tabs)
+    const handler = () => setAuthed(!!localStorage.getItem("access_token"));
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
 
   const onLogout = () => {
     localStorage.removeItem("access_token");
     setAuthed(false);
-    // Note: backend logout is stubbed; local removal is sufficient for mock
+    // Redirect to auth after logout
+    navigate("/auth", { replace: true });
   };
 
   return (
@@ -42,21 +51,50 @@ function App() {
           <div className="row" style={{ marginLeft: "auto" }}>
             {authed ? (
               <button className="btn secondary" onClick={onLogout}>Logout</button>
-            ) : (
-              <NavLink className="btn" to="/auth">Sign In</NavLink>
-            )}
+            ) : null}
           </div>
         </div>
       </header>
 
       <main className="main">
         <Routes>
+          {/* Make /auth the primary entry point when not authenticated */}
           <Route path="/" element={<Home />} />
-          <Route path="/services" element={<Services />} />
-          <Route path="/parts" element={<Parts />} />
-          <Route path="/centers" element={<ServiceCenters />} />
-          <Route path="/auth" element={<Auth onLogin={() => setAuthed(true)} />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/auth" element={<Auth onLogin={() => { setAuthed(true); navigate("/", { replace: true }); }} />} />
+          <Route
+            path="/services"
+            element={
+              <ProtectedRoute authed={authed}>
+                <Services />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parts"
+            element={
+              <ProtectedRoute authed={authed}>
+                <Parts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/centers"
+            element={
+              <ProtectedRoute authed={authed}>
+                <ServiceCenters />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute authed={authed}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          {/* Fallback to /auth if route not found */}
+          <Route path="*" element={<Navigate to={authed ? "/" : "/auth"} replace />} />
         </Routes>
       </main>
 
@@ -65,6 +103,19 @@ function App() {
       </footer>
     </div>
   );
+}
+
+/**
+// PUBLIC_INTERFACE
+ * ProtectedRoute - Simple route guard component.
+ * Redirects to /auth when not authenticated.
+ */
+function ProtectedRoute({ authed, children }) {
+  const location = useLocation();
+  if (!authed) {
+    return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
+  }
+  return children;
 }
 
 export default App;

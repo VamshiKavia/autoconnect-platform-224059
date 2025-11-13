@@ -83,6 +83,9 @@ html, body, #root {
   background: transparent;
   color: var(--primary);
 }
+.btn.secondary:hover {
+  background: var(--surface);
+}
 
 .main {
   flex: 1;
