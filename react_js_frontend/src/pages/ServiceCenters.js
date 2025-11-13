@@ -10,8 +10,7 @@ import { apiGet } from "../api/client";
  * - Optional geolocation: if granted, use device location to sort by nearest
  * - Filters:
  *    - q: text search across name/address
- *    - type: authorized | multi-brand | both (client-side mock)
- *    - brand: All | HYUNDAI | TOYATO | SUZUKI | BMW | AUDI | BENZ
+ *    - brand: All | HYUNDAI | TOYOTA | SUZUKI | BMW | AUDI | MERCEDES-BENZ
  * - Map: OpenStreetMap iframe centered on selected center; click a card to highlight and recenter
  * - Directions: Google Maps link using lat,lng
  *
@@ -24,24 +23,22 @@ export default function ServiceCenters() {
   const DEFAULT_CENTER = { lat: 12.9022, lng: 77.5660 };
   const DEFAULT_RADIUS_KM = 20;
 
-  // Allowed brand options per requirement (single-select dropdown)
-  // Note: value is the normalized brand token used for filtering; label is for display
+  // Allowed brand options (single-select dropdown)
   const BRAND_OPTIONS = [
     { value: "all", label: "All brands" },
     { value: "HYUNDAI", label: "HYUNDAI" },
-    { value: "TOYOTA", label: "TOYOTA" }, // corrected label/value
+    { value: "TOYOTA", label: "TOYOTA" },
     { value: "SUZUKI", label: "SUZUKI" },
     { value: "BMW", label: "BMW" },
     { value: "AUDI", label: "AUDI" },
-    { value: "MERCEDES-BENZ", label: "MERCEDES-BENZ" }, // corrected label/value
+    { value: "MERCEDES-BENZ", label: "MERCEDES-BENZ" },
   ];
 
   // UI state
   const [centers, setCenters] = useState([]);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
-  const [type, setType] = useState("both"); // authorized | multi-brand | both
-  const [brand, setBrand] = useState("all"); // All by default as requested
+  const [brand, setBrand] = useState("all"); // All by default
   const [selectedId, setSelectedId] = useState(null);
   const [userLoc, setUserLoc] = useState(null); // {lat,lng} if geolocation granted
   const [loading, setLoading] = useState(true);
@@ -119,17 +116,15 @@ export default function ServiceCenters() {
   }, [userLoc?.lat, userLoc?.lng]);
 
   // Helper to simulate a brand for each center deterministically (until backend provides it)
-  // We derive a pseudo-brand from the center id to keep it stable across renders and searches.
   const inferBrand = (centerId) => {
     if (!centerId) return "HYUNDAI";
     const brands = BRAND_OPTIONS.map(b => b.value).filter(v => v !== "all");
-    // simple hash: sum char codes mod brands.length
     let sum = 0;
     for (let i = 0; i < centerId.length; i++) sum += centerId.charCodeAt(i);
     return brands[sum % brands.length];
   };
 
-  // Derived filtered list (client-side for type/brand and q safety)
+  // Derived filtered list (client-side brand and q safety)
   const filteredCenters = useMemo(() => {
     const qLower = q.trim().toLowerCase();
 
@@ -147,20 +142,13 @@ export default function ServiceCenters() {
         (c.name || "").toLowerCase().includes(qLower) ||
         (c.address || "").toLowerCase().includes(qLower);
 
-      // In absence of real type on backend data, simulate from id length:
-      const isAuthorized = (c.id || "").length % 2 === 0;
-      const typeOk =
-        type === "both" ||
-        (type === "authorized" && isAuthorized) ||
-        (type === "multi-brand" && !isAuthorized);
-
       // Brand filter: if All, accept all; otherwise match inferred/backend brand normalized
       const inferred = inferBrand(c.id);
       const centerBrand = normalizeBrand(c.brand || inferred || "");
       const selectedBrand = normalizeBrand(brand);
       const brandOk = selectedBrand === "ALL" || centerBrand === selectedBrand;
 
-      return matchesQ && typeOk && brandOk;
+      return matchesQ && brandOk;
     });
 
     // Inject distance if missing using either userLoc or default center
@@ -176,8 +164,7 @@ export default function ServiceCenters() {
       list.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
     }
     return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centers, q, type, brand, userLoc?.lat, userLoc?.lng]);
+  }, [centers, q, brand, userLoc?.lat, userLoc?.lng]);
 
   const selected = useMemo(
     () => filteredCenters.find((c) => c.id === selectedId) || null,
@@ -189,8 +176,7 @@ export default function ServiceCenters() {
     ? { lat: selected.lat, lng: selected.lng }
     : userLoc || DEFAULT_CENTER;
 
-  // Zoom level heuristic based on radius
-  const zoom = 12; // good default for city area (~20km radius gives city-scale)
+  const zoom = 12; // good default for city area
 
   const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${mapCenter.lng - 0.2},${mapCenter.lat - 0.2},${mapCenter.lng + 0.2},${mapCenter.lat + 0.2}&layer=mapnik&marker=${mapCenter.lat},${mapCenter.lng}&zoom=${zoom}`;
 
@@ -218,19 +204,6 @@ export default function ServiceCenters() {
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by name or address"
             />
-          </div>
-          <div style={{ flex: "0 1 180px", minWidth: 160 }}>
-            <label className="label" htmlFor="type">Type</label>
-            <select
-              id="type"
-              className="input"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              <option value="both">Both</option>
-              <option value="authorized">Authorized</option>
-              <option value="multi-brand">Multi-brand</option>
-            </select>
           </div>
           <div style={{ flex: "0 1 200px", minWidth: 180 }}>
             <label className="label" htmlFor="brand">Brand</label>
