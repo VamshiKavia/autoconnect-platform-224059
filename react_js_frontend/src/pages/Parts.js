@@ -65,9 +65,9 @@ export default function Parts() {
       key: "magwheels",
       title: "Magwheels",
       description: "Lightweight magnesium alloy wheels for enhanced performance and handling.",
-      // Keep placeholder until a dedicated magwheels image is provided
-      img: "/assets/placeholder-magwheels.png",
-      alt: "Placeholder illustration for magwheels",
+      // Updated to use provided Magwheels image asset
+      img: "/assets/20251113_121007_fe078699-e9e5-4446-80b1-1252a61b6d00.jpg",
+      alt: "Magwheels product photo",
       specs: ["Ultra-light build", "Heat-dissipative design", "Anti-corrosion coating"],
     },
     {
