@@ -73,23 +73,23 @@ export default function Home() {
               padding: 8,
             }}
           >
-            <div
-              role="img"
-              aria-label="Ocean Motors latest car model"
+            {/* Use root-relative public path so it works in CRA and previews */}
+            <img
+              src="/assets/new-launch-car.png"
+              alt="Ocean Motors latest car model"
               style={{
                 width: "100%",
-                height: 220,
+                maxWidth: 640,
+                height: "auto",
                 borderRadius: 8,
+                objectFit: "contain",
+                display: "block",
                 background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--muted)",
-                fontWeight: 600,
               }}
-            >
-              Image Placeholder
-            </div>
+              width={640}
+              height={220}
+              loading="lazy"
+            />
           </div>
         </div>
       </section>
