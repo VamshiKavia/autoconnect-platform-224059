@@ -1,33 +1,28 @@
-import React from "react";
+import React, { useMemo, useRef } from "react";
 
 /**
 // PUBLIC_INTERFACE
  * ResponsiveImage - Accessible, responsive, and performant image component.
  *
  * Features:
- * - srcSet and sizes for responsive delivery
- * - Next-gen formats (AVIF/WebP) with graceful fallback to original format
+ * - Optional AVIF/WebP <source> with graceful fallback to <img>
  * - Lazy loading by default, eager optional
- * - Prevents CLS via width/height props
- * - Optional low-quality blur placeholder (LQIP)
- * - Optional CDN prefix via REACT_APP_CDN_URL
+ * - Prevents CLS via width/height props when provided
+ * - Optional low-quality blur placeholder (LQIP) via CSS background
+ * - Optional CDN prefix via REACT_APP_CDN_URL or REACT_APP_ASSET_CDN_PREFIX
+ * - Robust fallbacks so images render even if CDN unset or variants missing
  *
  * Props:
  * - src (string): required base image path (e.g., "/assets/image.png")
  * - alt (string): required alt text
- * - width (number): intrinsic width to reserve layout space (prevent CLS)
- * - height (number): intrinsic height to reserve layout space (prevent CLS)
+ * - width (number)
+ * - height (number)
  * - loading ("lazy"|"eager"): defaults to "lazy"
- * - className (string): optional className
- * - style (object): inline styles
- * - sizes (string): sizes attribute for responsive selection; defaults to "(max-width: 640px) 100vw, 640px"
- * - placeholder (string): optional placeholder image (very small blur) shown via CSS background
- *
- * Notes:
- * - This component assumes that variant files exist or the server/CDN handles format negotiation.
- *   For static CRA, we use the same base path with different extensions for <source> fallback chain:
- *   - .avif -> .webp -> original
- *   If .avif/.webp variants do not exist, the browser simply falls back to the <img> src.
+ * - className (string)
+ * - style (object)
+ * - sizes (string): sizes attribute, used only if srcSet is present
+ * - placeholder (string): optional placeholder image shown via CSS background
+ * - enableNextGenSources (boolean): include AVIF/WebP <source> tags (default: true)
  */
 export default function ResponsiveImage({
   src,
@@ -39,59 +34,81 @@ export default function ResponsiveImage({
   style = {},
   sizes = "(max-width: 640px) 100vw, 640px",
   placeholder,
+  enableNextGenSources = true,
 }) {
+  // Hooks must be called unconditionally at the top level.
+  const originalSrcRef = useRef(null);
+
+  // Detect absolute URLs we should not prefix
+  const isAbsolute = (p) => /^https?:\/\//i.test(p) || /^data:/i.test(p) || /^\/\//.test(p);
+
+  // Optional CDN prefix (support two env names; prefer REACT_APP_CDN_URL)
+  const cdnEnvA = (process.env.REACT_APP_CDN_URL || "").trim();
+  const cdnEnvB = (process.env.REACT_APP_ASSET_CDN_PREFIX || "").trim();
+  const cdnRaw = cdnEnvA || cdnEnvB || "";
+  const cdn = cdnRaw.replace(/\/+$/, ""); // trim trailing slash
+
+  // Only prefix if src is root-relative ("/...") or relative, and we actually have a CDN configured
+  const baseSrc = useMemo(() => {
+    if (!src) return ""; // handle missing src gracefully; we will return null below
+    if (!cdn || isAbsolute(src)) return src;
+    const path = src.startsWith("/") ? src : `/${src}`;
+    return `${cdn}${path}`;
+  }, [cdn, src]);
+
+  // Initialize the ref once baseSrc is known
+  if (originalSrcRef.current == null) {
+    originalSrcRef.current = baseSrc;
+  }
+
   if (!src || !alt) {
     // Fail-safe: never render without required attributes
-    // Prevents accessibility regressions
     return null;
   }
 
-  // Optional CDN prefix (do not hardcode; use env)
-  // Set REACT_APP_CDN_URL in .env to enable, otherwise leave blank
-  const cdn = (process.env.REACT_APP_CDN_URL || "").replace(/\/+$/, "");
-  const hasCdn = !!cdn;
-  const base = hasCdn ? `${cdn}${src}` : src;
-
-  // best-effort attempt at building alternative format paths by replacing extension
+  // Build paths for next-gen formats by replacing extension (best-effort)
   const toFormat = (path, ext) => {
-    const i = path.lastIndexOf(".");
-    if (i === -1) return `${path}.${ext}`;
-    return `${path.slice(0, i)}.${ext}`;
+    const qIndex = path.indexOf("?");
+    const hashIndex = path.indexOf("#");
+    const endIndex = [qIndex, hashIndex].filter((i) => i !== -1).sort((a, b) => a - b)[0] ?? path.length;
+    const base = path.slice(0, endIndex);
+    const suffix = path.slice(endIndex);
+    const i = base.lastIndexOf(".");
+    const replaced = i === -1 ? `${base}.${ext}` : `${base.slice(0, i)}.${ext}`;
+    return `${replaced}${suffix}`;
   };
 
-  const srcAvif = toFormat(base, "avif");
-  const srcWebp = toFormat(base, "webp");
+  const srcAvif = toFormat(baseSrc, "avif");
+  const srcWebp = toFormat(baseSrc, "webp");
 
-  // srcset building strategy:
-  // We provide a few common widths. Even if variants don't exist 1:1,
-  // browsers will ignore invalid ones or fetch the closest match.
-  // For SPA static assets, we keep the same path; CDNs often can auto-resize by querystring.
-  const commonWidths = [320, 480, 640, 768, 1024];
-  const buildSrcSet = (p) => commonWidths.map((w) => `${p} ${w}w`).join(", ");
+  // For CRA static assets we do not have multiple physical widths.
+  const imgShouldHaveSrcSet = false;
 
   // Placeholder style
   const cssPlaceholder =
     placeholder
       ? {
-          backgroundImage: `url(${hasCdn ? `${cdn}${placeholder}` : placeholder})`,
+          backgroundImage: `url(${!cdn || isAbsolute(placeholder) ? placeholder : `${cdn}${placeholder.startsWith("/") ? placeholder : `/${placeholder}`}`})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           filter: "blur(12px)",
         }
       : {};
 
-  // Ensure width/height to avoid layout shift. If absent, rely on CSS aspect ratio fallback.
   const imgProps = {};
   if (width) imgProps.width = width;
   if (height) imgProps.height = height;
 
   return (
     <picture>
-      {/* Next-gen formats first: AVIF, then WebP, then fallback */}
-      <source type="image/avif" srcSet={buildSrcSet(srcAvif)} sizes={sizes} />
-      <source type="image/webp" srcSet={buildSrcSet(srcWebp)} sizes={sizes} />
+      {enableNextGenSources ? (
+        <>
+          <source type="image/avif" srcSet={srcAvif} />
+          <source type="image/webp" srcSet={srcWebp} />
+        </>
+      ) : null}
       <img
-        src={base}
+        src={baseSrc}
         alt={alt}
         loading={loading}
         className={className}
@@ -103,19 +120,28 @@ export default function ResponsiveImage({
           objectFit: "contain",
           background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
           ...cssPlaceholder,
-          // Remove blur once loaded
           transition: placeholder ? "filter 250ms ease" : undefined,
           ...style,
         }}
         onLoad={(e) => {
           if (placeholder) {
-            // Remove blur on load
             e.currentTarget.style.filter = "none";
             e.currentTarget.style.backgroundImage = "none";
           }
         }}
-        sizes={sizes}
-        srcSet={buildSrcSet(base)}
+        onError={(e) => {
+          // If CDN-prefixed URL failed and original was root-relative, fallback to raw src
+          const current = e.currentTarget.getAttribute("src") || "";
+          if (cdn && current === originalSrcRef.current && !isAbsolute(src)) {
+            e.currentTarget.src = src; // try without CDN
+            return;
+          }
+          if (placeholder) {
+            e.currentTarget.style.filter = "none";
+            e.currentTarget.style.backgroundImage = "none";
+          }
+        }}
+        {...(imgShouldHaveSrcSet ? { sizes, srcSet: baseSrc } : {})}
         {...imgProps}
       />
     </picture>
