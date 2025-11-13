@@ -145,6 +145,23 @@ html, body, #root {
   align-items: center;
 }
 
+/* Centering utility for column layouts in hero/sections */
+.center-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* vertical centering within the column */
+  align-items: flex-start; /* keep text left-aligned for readability */
+  height: 100%;
+}
+
+/* On small screens where columns stack, avoid excessive vertical spacing */
+@media (max-width: 768px) {
+  .center-col {
+    justify-content: center;
+    align-items: flex-start; /* maintain left alignment for accessibility */
+  }
+}
+
 .footer {
   border-top: 1px solid #E5E7EB;
   padding: 16px var(--space);
