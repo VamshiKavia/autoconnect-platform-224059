@@ -310,6 +310,23 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
+/* Fullscreen overlay utility for map container */
+.fullscreen-overlay {
+  position: fixed !important;
+  inset: 0 !important;            /* top:0; right:0; bottom:0; left:0 */
+  z-index: 10000 !important;      /* above navbar and other content */
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  background: var(--bg);
+}
+
+/* Prevent background scroll when fullscreen is active */
+.no-scroll {
+  overflow: hidden !important;
+}
+
 /* Base map height (mobile-first) */
 .map-embed {
   display: block;

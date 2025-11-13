@@ -10,6 +10,7 @@ import { apiGet } from "../api/client";
  * - If geolocation is unavailable, use ISRO Layout (Bangalore) as origin for distance sorting.
  * - Debounce text input to avoid excessive map updates.
  * - If no matches, show message and keep previous map center/zoom.
+ * - Fullscreen toggle for map with accessibility and scroll lock.
  *
  * Features (existing preserved):
  * - Default map location: ISRO Layout, Bangalore (12.9022, 77.5660), radius 20 km
@@ -55,6 +56,25 @@ export default function ServiceCenters() {
     zoom: 12,
     bbox: null, // optional computed bounding box
   });
+
+  // Fullscreen map state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const mapContainerRef = useRef(null);
+
+  // Lock body scroll when fullscreen
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    if (isFullscreen) {
+      body.classList.add("no-scroll");
+    } else {
+      body.classList.remove("no-scroll");
+    }
+    // Cleanup to ensure class removed on unmount
+    return () => {
+      body.classList.remove("no-scroll");
+    };
+  }, [isFullscreen]);
 
   // Debounced query value to throttle updates
   const [debouncedQ, setDebouncedQ] = useState(q);
@@ -173,7 +193,7 @@ export default function ServiceCenters() {
         (c.name || "").toLowerCase().includes(qLower) ||
         (c.address || "").toLowerCase().includes(qLower);
 
-      // Brand filter: if All, accept all; otherwise match inferred/backend brand normalized
+    // Brand filter: if All, accept all; otherwise match inferred/backend brand normalized
       const inferred = inferBrand(c.id);
       const centerBrand = normalizeBrand(c.brand || inferred || "");
       const selectedBrand = normalizeBrand(brand);
@@ -264,7 +284,6 @@ export default function ServiceCenters() {
     const bbox = computeBBox(filteredCenters);
     if (bbox) {
       // For OSM embed using bbox, we also place marker roughly at the closest center
-      const origin = userLoc || DEFAULT_CENTER;
       const sorted = [...filteredCenters].sort(
         (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
       );
@@ -276,7 +295,6 @@ export default function ServiceCenters() {
       });
     } else {
       // Fallback: center to closest
-      const origin = userLoc || DEFAULT_CENTER;
       const sorted = [...filteredCenters].sort(
         (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
       );
@@ -318,6 +336,15 @@ export default function ServiceCenters() {
       c.lat + "," + c.lng
     )}&destination_place_id=&travelmode=driving`;
 
+  // Accessible toggle handler for keyboard and click
+  const toggleFullscreen = (e) => {
+    if (e && e.type === "keydown") {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+    }
+    setIsFullscreen((v) => !v);
+  };
+
   return (
     <div className="container">
       <h2 className="section-title">Service Centers</h2>
@@ -356,13 +383,52 @@ export default function ServiceCenters() {
         </div>
       </div>
 
-      {/* Map */}
-      <div className="card map-card" style={{ marginBottom: 16 }}>
+      {/* Map with fullscreen toggle */}
+      <div
+        ref={mapContainerRef}
+        className={
+          "card map-card " + (isFullscreen ? "fullscreen-overlay" : "")
+        }
+        style={{ marginBottom: 16 }}
+        aria-label="Map container"
+      >
+        <div
+          className="row"
+          style={{
+            justifyContent: "flex-end",
+            padding: 8,
+            position: isFullscreen ? "fixed" : "relative",
+            top: isFullscreen ? 8 : undefined,
+            right: isFullscreen ? 8 : undefined,
+            zIndex: isFullscreen ? 10001 : undefined,
+          }}
+        >
+          <button
+            className="btn secondary"
+            onClick={toggleFullscreen}
+            onKeyDown={toggleFullscreen}
+            aria-pressed={isFullscreen}
+            aria-label={isFullscreen ? "Exit fullscreen map" : "Enter fullscreen map"}
+            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          </button>
+        </div>
+
         <iframe
           title="Service Centers Map"
           src={osmUrl}
           className="map-embed"
           aria-label="Map showing service centers around selected area"
+          style={
+            isFullscreen
+              ? {
+                  width: "100vw",
+                  height: "100vh",
+                  maxHeight: "100vh",
+                }
+              : undefined
+          }
         />
       </div>
 
