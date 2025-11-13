@@ -7,25 +7,32 @@ import { apiGet } from "../api/client";
  */
 export default function Parts() {
   const [parts, setParts] = useState([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    apiGet("/parts").then(setParts);
+    apiGet("/parts")
+      .then(setParts)
+      .catch((e) => setError(e?.message || "Failed to load parts"));
   }, []);
 
   return (
     <div className="container">
       <h2 className="section-title">Spare Parts</h2>
       <p className="subtitle">Quality parts for reliable performance.</p>
-      <div className="grid">
-        {parts.map((p) => (
-          <div key={p.id} className="card" style={{ gridColumn: "span 4" }}>
-            <strong>{p.name}</strong>
-            <div className="subtitle">SKU: {p.sku}</div>
-            <div style={{ marginTop: 6, fontWeight: 600 }}>${p.price}</div>
-            <button className="btn" style={{ marginTop: 12 }}>Add to Cart</button>
-          </div>
-        ))}
-      </div>
+      {error ? (
+        <div className="card" style={{ color: "var(--error)" }}>{error}</div>
+      ) : (
+        <div className="grid">
+          {parts.map((p) => (
+            <div key={p.id} className="card" style={{ gridColumn: "span 4" }}>
+              <strong>{p.name}</strong>
+              <div className="subtitle">SKU: {p.sku}</div>
+              <div style={{ marginTop: 6, fontWeight: 600 }}>${p.price}</div>
+              <button className="btn" style={{ marginTop: 12 }}>Add to Cart</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

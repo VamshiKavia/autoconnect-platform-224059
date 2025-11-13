@@ -19,7 +19,7 @@ The frontend uses the following env vars (do not hardcode secrets):
 - REACT_APP_FEATURE_FLAGS
 - REACT_APP_EXPERIMENTS_ENABLED
 
-Create a .env file locally as needed.
+Create a .env file locally as needed. See .env.example for typical values.
 
 ## Run
 
@@ -30,8 +30,27 @@ Open http://localhost:3000
 
 Ensure backend is running on port 3001.
 
+## API Paths and Health
+
+- The API client automatically prefixes requests with `/api`. For example:
+  - `apiGet("/cars")` -> `GET {REACT_APP_API_BASE}/api/cars`
+  - `apiPost("/auth/login")` -> `POST {REACT_APP_API_BASE}/api/auth/login`
+- If your backend does not use `/api` prefix, either:
+  - Set your routes to use `/api/*`, or
+  - Pass fully-qualified API paths beginning with `/api/...` (the client will not double-prefix), or
+  - Adjust the client accordingly.
+- A healthcheck is performed from the Home page against `{REACT_APP_API_BASE}{REACT_APP_HEALTHCHECK_PATH}` (defaults to `/`), showing connectivity status.
+
+## CORS
+
+Backend must allow the frontend origin:
+- Local dev: http://localhost:3000
+- Deployed preview: your preview URL
+
+The backend FastAPI app should configure CORS to include these origins.
+
 ## Notes
 
 - Theme: Ocean Professional (see src/theme.css)
 - Routing: react-router-dom
-- API client: src/api/client.js using env base URL
+- API client: src/api/client.js using env base URL with `/api` prefix handling and improved error messages

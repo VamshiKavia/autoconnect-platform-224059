@@ -7,9 +7,12 @@ import { apiGet } from "../api/client";
  */
 export default function ServiceCenters() {
   const [centers, setCenters] = useState([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    apiGet("/service-centers").then(setCenters);
+    apiGet("/service-centers")
+      .then(setCenters)
+      .catch((e) => setError(e?.message || "Failed to load service centers"));
   }, []);
 
   return (
@@ -35,18 +38,22 @@ export default function ServiceCenters() {
         </div>
       </div>
 
-      <div className="grid">
-        {centers.map((c) => (
-          <div key={c.id} className="card" style={{ gridColumn: "span 6" }}>
-            <strong>{c.name}</strong>
-            <div className="subtitle">{c.address}</div>
-            <div style={{ color: "var(--muted)", fontSize: 13 }}>
-              Lat: {c.lat}, Lng: {c.lng}
+      {error ? (
+        <div className="card" style={{ color: "var(--error)" }}>{error}</div>
+      ) : (
+        <div className="grid">
+          {centers.map((c) => (
+            <div key={c.id} className="card" style={{ gridColumn: "span 6" }}>
+              <strong>{c.name}</strong>
+              <div className="subtitle">{c.address}</div>
+              <div style={{ color: "var(--muted)", fontSize: 13 }}>
+                Lat: {c.lat}, Lng: {c.lng}
+              </div>
+              <div style={{ marginTop: 8 }}>Phone: {c.phone}</div>
             </div>
-            <div style={{ marginTop: 8 }}>Phone: {c.phone}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -18,7 +18,7 @@ export default function Auth({ onLogin }) {
       localStorage.setItem("access_token", res.access_token);
       if (onLogin) onLogin(res);
     } catch (err) {
-      setError(err.message || "Login failed");
+      setError(err?.message || "Login failed. Please check your credentials or try again later.");
     }
   };
 
