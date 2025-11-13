@@ -212,6 +212,15 @@ textarea:focus-visible {
   border-color: #93C5FD;
 }
 
+/* Parts page minimal utilities */
+.parts-img {
+  /* Helps ensure placeholders look consistent across cards */
+  background: linear-gradient(135deg, #eef2ff, #f9fafb);
+}
+
+/* On very small screens allow cards to span full width (reuses launch-card rules) */
+/* No extra media queries needed since .launch-card handles 12→6→4 spans responsively */
+
 .section-title {
   font-size: 20px;
   font-weight: 600;
