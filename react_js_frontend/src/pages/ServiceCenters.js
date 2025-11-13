@@ -11,6 +11,7 @@ import { apiGet } from "../api/client";
  * - Debounce text input to avoid excessive map updates.
  * - If no matches, show message and keep previous map center/zoom.
  * - Fullscreen toggle for map with accessibility and scroll lock.
+ * - Sync filters to URL (?q=...&brand=...) with debounce and history updates.
  *
  * Features (existing preserved):
  * - Default map location: ISRO Layout, Bangalore (12.9022, 77.5660), radius 20 km
@@ -61,6 +62,9 @@ export default function ServiceCenters() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const mapContainerRef = useRef(null);
 
+  // Track initial URL parsing to avoid redundant replace on mount
+  const didInitFromUrl = useRef(false);
+
   // Lock body scroll when fullscreen
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -76,7 +80,49 @@ export default function ServiceCenters() {
     };
   }, [isFullscreen]);
 
-  // Debounced query value to throttle updates
+  // --- URL <-> State Sync Helpers ---
+
+  // Normalize brand coming from URL or UI to internal values
+  const normalizeBrandFromUrl = (b) => {
+    if (!b) return "all";
+    const t = String(b).trim().toUpperCase();
+    if (t === "ALL") return "all";
+    if (t === "TOYATO") return "TOYOTA";
+    if (t === "BENZ") return "MERCEDES-BENZ";
+    // Only allow known brands; otherwise fall back to "all"
+    const allowed = BRAND_OPTIONS.map((o) => o.value);
+    return allowed.includes(t) ? t : "all";
+  };
+
+  // Read initial params on mount and on popstate for back/forward
+  useEffect(() => {
+    const applyFromLocation = () => {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const qParam = sp.get("q") || "";
+        const brandParamRaw = sp.get("brand");
+        const brandParam = normalizeBrandFromUrl(brandParamRaw);
+        // Set only if different to avoid unnecessary renders
+        setQ(qParam);
+        setBrand(brandParam);
+      } catch {
+        // ignore malformed URL
+      }
+    };
+
+    // Initial apply from URL
+    if (!didInitFromUrl.current) {
+      applyFromLocation();
+      didInitFromUrl.current = true;
+    }
+
+    // Listen to back/forward to restore state from URL
+    const onPop = () => applyFromLocation();
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // Debounced query value to throttle updates and URL changes
   const [debouncedQ, setDebouncedQ] = useState(q);
   const debounceTimer = useRef(null);
   useEffect(() => {
@@ -86,6 +132,41 @@ export default function ServiceCenters() {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, [q]);
+
+  // Update URL when search or brand changes (debounced for q)
+  useEffect(() => {
+    // Build new query params
+    const sp = new URLSearchParams(window.location.search);
+
+    // q param: set only if non-empty; else remove
+    const qVal = debouncedQ.trim();
+    if (qVal) {
+      sp.set("q", qVal);
+    } else {
+      sp.delete("q");
+    }
+
+    // brand param: if "all" treat as no brand param; otherwise set brand
+    // Optionally allow brand=ALL for explicitness; choose to omit for cleaner URLs
+    if (brand && brand !== "all") {
+      sp.set("brand", encodeURIComponent(brand).replace(/%20/g, "+"));
+    } else {
+      // keep consistent: remove brand param for 'All'
+      sp.delete("brand");
+    }
+
+    const newSearch = sp.toString();
+    const newUrl =
+      window.location.pathname + (newSearch ? `?${newSearch}` : "");
+
+    // Use replaceState to avoid polluting history on each keystroke
+    // Ensures no full page reload
+    try {
+      window.history.replaceState(null, "", newUrl);
+    } catch {
+      // ignore environments without History API
+    }
+  }, [debouncedQ, brand]);
 
   // Compute Haversine distance (km)
   const haversineKm = (lat1, lon1, lat2, lon2) => {
@@ -193,11 +274,11 @@ export default function ServiceCenters() {
         (c.name || "").toLowerCase().includes(qLower) ||
         (c.address || "").toLowerCase().includes(qLower);
 
-    // Brand filter: if All, accept all; otherwise match inferred/backend brand normalized
+      // Brand filter: if All, accept all; otherwise match inferred/backend brand normalized
       const inferred = inferBrand(c.id);
       const centerBrand = normalizeBrand(c.brand || inferred || "");
       const selectedBrand = normalizeBrand(brand);
-      const brandOk = selectedBrand === "ALL" || centerBrand === selectedBrand;
+      const brandOk = selectedBrand === "ALL" || selectedBrand === "ALL BRANDS" || selectedBrand === "ALL" || selectedBrand === "ALL BRANDS" || selectedBrand === "ALL" || selectedBrand === "ALL BRANDS" ? true : centerBrand === selectedBrand;
 
       return matchesQ && brandOk;
     });
