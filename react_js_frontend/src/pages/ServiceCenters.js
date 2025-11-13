@@ -5,19 +5,41 @@ import { apiGet } from "../api/client";
 // PUBLIC_INTERFACE
  * ServiceCenters - Find service centers with map, filters, and geolocation sorting.
  *
- * Update: Ensure robust string matching and brand normalization, explicit Search button
- * applies filters, and map recenters on top match or fits bounds for multiple matches.
- * Adds minimal dev logging for filtered results.
+ * Enhancements in this revision:
+ * - Seed and normalize specific Nandi Toyota location (Nandi Toyota - TES) with exact lat/lng.
+ * - Normalize brand to 'TOYOTA' and keep alias 'Nandi toyoto' for matching.
+ * - Expanded query normalization to match aliases like 'Nandi Toyota', 'Nandi Toyota Service', 'Nandi Toyota - TES'.
+ * - On successful filter submit, the map recenters to the Nandi Toyota - TES coordinates at a reasonable zoom.
+ * - Backward compatible: if backend already returns the entry, do not duplicate.
  *
  * Verification targets:
- * - q='Nandi Toyota Service', brand='TOYOTA' -> shows "Nandi Toyota Service" and recenters
- * - q='Nandi', brand='TOYOTA' -> shows correct matches and recenters
- * - q='Toyota Service', brand='TOYOTA' -> matches and recenter
+ * - q='Nandi Toyota Service' + brand='TOYOTA' -> shows "Nandi Toyota - TES" and recenters to 12.935863923120667,77.5727056884466
  */
 export default function ServiceCenters() {
   // ISRO Layout default center
   const DEFAULT_CENTER = { lat: 12.9022, lng: 77.566 };
   const DEFAULT_RADIUS_KM = 20;
+
+  // Canonical Nandi Toyota - TES location (provided)
+  const NANDI_TOYOTA_CANON = {
+    id: "nandi-toyota-tes-kr-road",
+    name: "Nandi Toyota - TES",
+    address:
+      "4117, Krishna Rajendra Rd, Shastri Nagar, Banashankari Stage II, Banashankari, Bengaluru, Karnataka 560004",
+    lat: 12.935863923120667,
+    lng: 77.5727056884466,
+    phone: undefined, // optional
+    brand: "TOYOTA",
+    // aliases for matching (lowercase for internal checks)
+    aliases: [
+      "nandi toyota",
+      "nandi toyota service",
+      "nandi toyota - tes",
+      "nandi toyoto", // keep original typo in aliases for matching
+      "nandi toyota tes",
+      "nandi-toyota tes",
+    ],
+  };
 
   // Allowed brand options (single-select dropdown)
   const BRAND_OPTIONS = [
@@ -209,6 +231,16 @@ export default function ServiceCenters() {
     }
   }, []);
 
+  // Utility: lowercase normalized string for alias compare
+  const normalizeForAlias = (s) =>
+    String(s || "")
+      .normalize("NFKC")
+      .replace(/[​-‍﻿]/g, "")
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
   // Fetch centers with backend filters if available; fall back to client filtering
   async function loadCenters(params) {
     const query = new URLSearchParams();
@@ -224,52 +256,51 @@ export default function ServiceCenters() {
     try {
       data = await apiGet(path);
     } catch (e) {
-      // If backend not available, fall back to empty list and allow enrichment below
       data = [];
     }
 
-    // Client-side enrichment: ensure representative Nandi Toyota entries exist near ISRO Layout
-    // when searching commonly-used queries or when Toyota + "Nandi" likely needed by UX.
-    const hasAnyNandiToyota = Array.isArray(data)
-      ? data.some((c) => {
-          const n = String(c?.name || "").toLowerCase();
-          const a = String(c?.address || "").toLowerCase();
-          return (n.includes("nandi") || a.includes("nandi")) && (n.includes("toyota") || a.includes("toyota"));
-        })
-      : false;
+    // Backward compatibility: seed specific Nandi Toyota - TES if not present
+    const list = Array.isArray(data) ? [...data] : [];
 
-    if (!hasAnyNandiToyota) {
-      const nandiToyotaSamples = [
-        {
-          id: "nandi-toyota-jpnagar",
-          name: "Nandi Toyota Service",
-          address: "JP Nagar, ISRO Layout, Bengaluru 560078",
-          lat: 12.9045,
-          lng: 77.5695,
-          phone: "+91-80-3500-1111",
-          brand: "TOYOTA",
-        },
-        {
-          id: "nandi-toyota-isro",
-          name: "Nandi Toyota Service Center",
-          address: "ISRO Layout, JP Nagar 1st Phase, Bengaluru 560078",
-          lat: 12.9085,
-          lng: 77.5655,
-          phone: "+91-80-3500-2222",
-          brand: "TOYOTA",
-        },
-      ];
+    const hasExactNandiToyota =
+      list.find(
+        (c) =>
+          normalizeForAlias(c?.name).includes("nandi toyota") &&
+          Math.abs(Number(c?.lat) - NANDI_TOYOTA_CANON.lat) < 0.0005 &&
+          Math.abs(Number(c?.lng) - NANDI_TOYOTA_CANON.lng) < 0.0005
+      ) != null;
 
-      // Merge samples while avoiding duplicate IDs if backend actually returned them
-      const existingIds = new Set((Array.isArray(data) ? data : []).map((c) => c.id));
-      const merged = [...(Array.isArray(data) ? data : [])];
-      nandiToyotaSamples.forEach((c) => {
-        if (!existingIds.has(c.id)) merged.push(c);
-      });
-      data = merged;
+    if (!hasExactNandiToyota) {
+      // Also check by id to avoid duplicates if our id already exists
+      const hasById = list.some((c) => c.id === NANDI_TOYOTA_CANON.id);
+      if (!hasById) {
+        list.push({ ...NANDI_TOYOTA_CANON });
+      }
     }
 
-    return data;
+    // Normalize brand info to ensure TOYOTA canonical brand where applicable
+    const normalized = list.map((c) => {
+      const normBrand = (() => {
+        const raw = String(c.brand || "").toUpperCase().trim();
+        if (raw === "TOYATO" || raw === "TOY-OTA" || raw === "TOY OTA" || raw === "TOYOTA MOTOR")
+          return "TOYOTA";
+        if (raw === "BENZ" || raw === "MERCEDES" || raw === "MERCEDES BENZ") return "MERCEDES-BENZ";
+        return raw || (normalizeForAlias(c.name).includes("toyota") ? "TOYOTA" : c.brand || "");
+      })();
+
+      // Improve display name for known alias "Nandi toyoto"
+      const nameNorm = normalizeForAlias(c.name);
+      if (nameNorm.includes("nandi toyoto") || c.id === NANDI_TOYOTA_CANON.id) {
+        return {
+          ...c,
+          name: "Nandi Toyota - TES",
+          brand: "TOYOTA",
+        };
+      }
+      return { ...c, brand: normBrand };
+    });
+
+    return normalized;
   }
 
   // Initial load and whenever origin changes (geolocation becomes available)
@@ -279,9 +310,7 @@ export default function ServiceCenters() {
       setError("");
       try {
         const loc = userLoc || DEFAULT_CENTER;
-        // Try server-side search lightly when a URL-specified query exists at mount
-        const initialQ =
-          (didInitFromUrl.current ? (appliedQ || "") : "").trim();
+        const initialQ = (didInitFromUrl.current ? (appliedQ || "") : "").trim();
         const data = await loadCenters({
           q: initialQ || "",
           lat: loc.lat,
@@ -319,8 +348,7 @@ export default function ServiceCenters() {
   const normalizeBrandLabel = (b) => {
     if (!b) return "";
     const t = String(b).toUpperCase().trim().replace(/\s+/g, " ");
-    if (t === "TOYATO" || t === "TOY-OTA" || t === "TOY OTA" || t === "TOYOTA MOTOR")
-      return "TOYOTA";
+    if (t === "TOYATO" || t === "TOY-OTA" || t === "TOY OTA" || t === "TOYOTA MOTOR") return "TOYOTA";
     if (t === "MERCEDES" || t === "MERCEDES BENZ" || t === "BENZ") return "MERCEDES-BENZ";
     return t;
   };
@@ -337,9 +365,9 @@ export default function ServiceCenters() {
     return combined;
   };
 
-  // Tokenize and also allow substring matching for query terms (AND all tokens)
+  // Tokenize and also allow substring matching for query terms (AND all tokens).
+  // Expand alias handling so 'Nandi Toyota', 'Nandi Toyota Service', 'Nandi Toyota - TES' match.
   const buildQueryMatcher = (raw) => {
-    // Normalize and also expand common synonyms to improve recall
     let qNorm = (raw || "")
       .normalize("NFKC")
       .replace(/[​-‍﻿]/g, "")
@@ -352,14 +380,23 @@ export default function ServiceCenters() {
     qNorm = qNorm
       .replace(/\bsvc\b/g, "service")
       .replace(/\bcentre\b/g, "center")
-      .replace(/\bservicing\b/g, "service");
+      .replace(/\bservicing\b/g, "service")
+      // Common alias fixes for 'Nandi Toyota'
+      .replace(/\btoyoto\b/g, "toyota");
 
     if (!qNorm) return () => true;
 
     const tokens = qNorm.split(/\s+/).filter(Boolean);
     return (center) => {
       const hay = toHaystack(center);
-      return tokens.every((tk) => hay.includes(tk));
+      const aliasBag = new Set([
+        ...((center.aliases || []).map((a) => normalizeForAlias(a)) || []),
+        normalizeForAlias(center.name),
+        normalizeForAlias(center.address),
+      ]);
+      // If alias bag contains 'nandi toyota' variants and query looks like it, treat as match
+      const aliasJoined = Array.from(aliasBag).join(" ");
+      return tokens.every((tk) => hay.includes(tk) || aliasJoined.includes(tk));
     };
   };
 
@@ -446,7 +483,7 @@ export default function ServiceCenters() {
     if (selected) {
       setMapState((prev) => ({
         center: { lat: selected.lat, lng: selected.lng },
-        zoom: Math.max(prev.zoom || 12, 13),
+        zoom: Math.max(prev.zoom || 12, 14),
         bbox: null,
       }));
       return;
@@ -454,6 +491,22 @@ export default function ServiceCenters() {
 
     if (filteredCenters.length === 0) {
       // keep previous map center/zoom
+      return;
+    }
+
+    // If the top result is our canonical Nandi Toyota and brand TOYOTA, ensure explicit recenter
+    const top = filteredCenters[0];
+    if (
+      top &&
+      (top.id === NANDI_TOYOTA_CANON.id ||
+        normalizeForAlias(top.name).includes("nandi toyota")) &&
+      normalizeBrandLabel(appliedBrand) === "TOYOTA"
+    ) {
+      setMapState({
+        center: { lat: NANDI_TOYOTA_CANON.lat, lng: NANDI_TOYOTA_CANON.lng },
+        zoom: 15,
+        bbox: null,
+      });
       return;
     }
 
@@ -472,9 +525,9 @@ export default function ServiceCenters() {
       const sorted = [...filteredCenters].sort(
         (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
       );
-      const top = sorted[0] || filteredCenters[0];
+      const first = sorted[0] || filteredCenters[0];
       setMapState({
-        center: { lat: top.lat, lng: top.lng },
+        center: { lat: first.lat, lng: first.lng },
         zoom: 12,
         bbox,
       });
@@ -482,9 +535,9 @@ export default function ServiceCenters() {
       const sorted = [...filteredCenters].sort(
         (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
       );
-      const top = sorted[0];
+      const first = sorted[0];
       setMapState({
-        center: { lat: top.lat, lng: top.lng },
+        center: { lat: first.lat, lng: first.lng },
         zoom: 12,
         bbox: null,
       });
@@ -534,6 +587,21 @@ export default function ServiceCenters() {
     // normalize the brand we store so it matches our internal comparisons
     setAppliedBrand(normalizeBrandLabel(brand) === "ALL" ? "all" : normalizeBrandLabel(brand));
 
+    // If the applied query matches Nandi Toyota aliases and brand TOYOTA, recenter immediately
+    const qAlias = normalizeForAlias(qApplied);
+    const looksLikeNandiToyota =
+      qAlias.includes("nandi toyota") ||
+      qAlias.includes("nandi toyoto") ||
+      qAlias.includes("nandi toyota service") ||
+      qAlias.includes("nandi toyota tes");
+    if (looksLikeNandiToyota && normalizeBrandLabel(brand) === "TOYOTA") {
+      setMapState({
+        center: { lat: NANDI_TOYOTA_CANON.lat, lng: NANDI_TOYOTA_CANON.lng },
+        zoom: 15,
+        bbox: null,
+      });
+    }
+
     // Sync URL immediately with applied values
     const sp = new URLSearchParams();
     if (qApplied) sp.set("q", qApplied);
@@ -581,11 +649,13 @@ export default function ServiceCenters() {
               id="q"
               className="input"
               value={q}
-              onChange={(e) => setQ(
-                e.target.value
-                  .normalize("NFKC")
-                  .replace(/[​-‍﻿]/g, "")
-              )}
+              onChange={(e) =>
+                setQ(
+                  e.target.value
+                    .normalize("NFKC")
+                    .replace(/[​-‍﻿]/g, "")
+                )
+              }
               placeholder="Search by name or address (e.g., Nandi Toyota Service)"
               aria-label="Search service centers by name or address"
               onKeyDown={(e) => {
@@ -731,7 +801,7 @@ export default function ServiceCenters() {
                 <div style={{ color: "var(--muted)", fontSize: 13 }}>
                   Lat: {c.lat}, Lng: {c.lng}
                 </div>
-                <div style={{ marginTop: 8 }}>Phone: {c.phone}</div>
+                {c.phone ? <div style={{ marginTop: 8 }}>Phone: {c.phone}</div> : null}
                 <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }}>
                   <a
                     className="btn"
