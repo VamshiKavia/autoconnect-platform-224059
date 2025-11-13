@@ -51,7 +51,17 @@ export default function Auth({ onLogin }) {
       }
       if (onLogin) onLogin(res);
     } catch (e) {
-      setErr(e?.message || "Authentication failed. Try again.");
+      // Friendlier error mapping
+      const message = String(e?.message || "").toLowerCase();
+      if (message.includes("404")) {
+        setErr("Service unavailable. Please try again later.");
+      } else if (message.includes("409")) {
+        setErr("Account already exists. Try signing in instead.");
+      } else if (message.includes("network")) {
+        setErr("Network error. Check your connection and backend URL.");
+      } else {
+        setErr(e?.message || "Authentication failed. Try again.");
+      }
     } finally {
       setLoading(false);
     }
