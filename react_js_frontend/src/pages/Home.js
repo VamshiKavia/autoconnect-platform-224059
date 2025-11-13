@@ -45,7 +45,7 @@ export default function Home() {
         >
           <div style={{ flex: "1 1 360px", padding: 16 }}>
             <h2 id="new-launch-heading" className="section-title" style={{ marginBottom: 6 }}>
-              New Launch
+              New Launch | Vertesa
             </h2>
             <div className="subtitle" style={{ marginBottom: 10 }}>
               Introducing our latest model with refined aerodynamics and performance.
