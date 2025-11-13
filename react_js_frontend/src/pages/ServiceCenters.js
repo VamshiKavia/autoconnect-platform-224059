@@ -1,11 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "../api/client";
 
 /**
 // PUBLIC_INTERFACE
  * ServiceCenters - Find service centers with map, filters, and geolocation sorting.
  *
- * Features:
+ * Enhancements:
+ * - On search/brand change, compute filtered results and recenter/zoom map to nearest match.
+ * - If geolocation is unavailable, use ISRO Layout (Bangalore) as origin for distance sorting.
+ * - Debounce text input to avoid excessive map updates.
+ * - If no matches, show message and keep previous map center/zoom.
+ *
+ * Features (existing preserved):
  * - Default map location: ISRO Layout, Bangalore (12.9022, 77.5660), radius 20 km
  * - Optional geolocation: if granted, use device location to sort by nearest
  * - Filters:
@@ -43,6 +49,24 @@ export default function ServiceCenters() {
   const [userLoc, setUserLoc] = useState(null); // {lat,lng} if geolocation granted
   const [loading, setLoading] = useState(true);
 
+  // Map state to preserve previous center/zoom on no-match
+  const [mapState, setMapState] = useState({
+    center: DEFAULT_CENTER,
+    zoom: 12,
+    bbox: null, // optional computed bounding box
+  });
+
+  // Debounced query value to throttle updates
+  const [debouncedQ, setDebouncedQ] = useState(q);
+  const debounceTimer = useRef(null);
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => setDebouncedQ(q), 300); // 300ms debounce
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [q]);
+
   // Compute Haversine distance (km)
   const haversineKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371.0;
@@ -78,6 +102,7 @@ export default function ServiceCenters() {
   // Fetch centers with backend filters if available; fall back to client filtering
   async function loadCenters(params) {
     const query = new URLSearchParams();
+    // send debounced query to backend to help narrow results server-side
     if (params.q) query.set("q", params.q);
     if (params.lat != null && params.lng != null) {
       query.set("lat", String(params.lat));
@@ -90,7 +115,7 @@ export default function ServiceCenters() {
     return data;
   }
 
-  // Initial load: prefer using user location when available, else default
+  // Initial load and whenever origin changes (geolocation becomes available)
   useEffect(() => {
     async function run() {
       setLoading(true);
@@ -98,12 +123,18 @@ export default function ServiceCenters() {
       try {
         const loc = userLoc || DEFAULT_CENTER;
         const data = await loadCenters({
-          q: "",
+          q: "", // initial no query
           lat: loc.lat,
           lng: loc.lng,
           radius_km: DEFAULT_RADIUS_KM,
         });
         setCenters(Array.isArray(data) ? data : []);
+        // Initialize map center only on very first load
+        setMapState((ms) => ({
+          center: loc,
+          zoom: ms.zoom ?? 12,
+          bbox: null,
+        }));
       } catch (e) {
         setError(e?.message || "Failed to load service centers");
         setCenters([]);
@@ -118,7 +149,7 @@ export default function ServiceCenters() {
   // Helper to simulate a brand for each center deterministically (until backend provides it)
   const inferBrand = (centerId) => {
     if (!centerId) return "HYUNDAI";
-    const brands = BRAND_OPTIONS.map(b => b.value).filter(v => v !== "all");
+    const brands = BRAND_OPTIONS.map((b) => b.value).filter((v) => v !== "all");
     let sum = 0;
     for (let i = 0; i < centerId.length; i++) sum += centerId.charCodeAt(i);
     return brands[sum % brands.length];
@@ -126,7 +157,7 @@ export default function ServiceCenters() {
 
   // Derived filtered list (client-side brand and q safety)
   const filteredCenters = useMemo(() => {
-    const qLower = q.trim().toLowerCase();
+    const qLower = debouncedQ.trim().toLowerCase();
 
     // Map legacy/alternate brand tokens to normalized values
     const normalizeBrand = (b) => {
@@ -159,26 +190,128 @@ export default function ServiceCenters() {
       return { ...c, distance_km: Math.round(d * 1000) / 1000 };
     });
 
-    // If user location available, sort by distance
-    if (origin) {
-      list.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
-    }
+    // Sort by distance from origin
+    list.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0));
     return list;
-  }, [centers, q, brand, userLoc?.lat, userLoc?.lng]);
+  }, [centers, debouncedQ, brand, userLoc?.lat, userLoc?.lng]);
 
   const selected = useMemo(
     () => filteredCenters.find((c) => c.id === selectedId) || null,
     [filteredCenters, selectedId]
   );
 
-  // Build OSM map URL centered on selected or default view (or user location)
-  const mapCenter = selected
-    ? { lat: selected.lat, lng: selected.lng }
-    : userLoc || DEFAULT_CENTER;
+  // Compute bounding box for a set of centers
+  const computeBBox = (items) => {
+    if (!items || items.length === 0) return null;
+    let minLat = +Infinity,
+      minLng = +Infinity,
+      maxLat = -Infinity,
+      maxLng = -Infinity;
+    items.forEach((c) => {
+      if (typeof c.lat === "number" && typeof c.lng === "number") {
+        minLat = Math.min(minLat, c.lat);
+        minLng = Math.min(minLng, c.lng);
+        maxLat = Math.max(maxLat, c.lat);
+        maxLng = Math.max(maxLng, c.lng);
+      }
+    });
+    if (!isFinite(minLat) || !isFinite(minLng) || !isFinite(maxLat) || !isFinite(maxLng)) {
+      return null;
+    }
+    // Add a small padding
+    const padLat = 0.02;
+    const padLng = 0.02;
+    return {
+      west: minLng - padLng,
+      south: minLat - padLat,
+      east: maxLng + padLng,
+      north: maxLat + padLat,
+    };
+  };
 
-  const zoom = 12; // good default for city area
+  // Recenter/zoom logic on filter changes:
+  // - If there is a selected card, center to it.
+  // - Else, if there are filtered results:
+  //    - If 1 result: center to it and set closer zoom
+  //    - If multiple: set bbox covering them and keep a reasonable zoom
+  // - If no results: keep previous map center/zoom, do not change mapState
+  useEffect(() => {
+    if (selected) {
+      setMapState((prev) => ({
+        center: { lat: selected.lat, lng: selected.lng },
+        zoom: Math.max(prev.zoom || 12, 13), // a tad closer on a single selection
+        bbox: null,
+      }));
+      return;
+    }
 
-  const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${mapCenter.lng - 0.2},${mapCenter.lat - 0.2},${mapCenter.lng + 0.2},${mapCenter.lat + 0.2}&layer=mapnik&marker=${mapCenter.lat},${mapCenter.lng}&zoom=${zoom}`;
+    if (filteredCenters.length === 0) {
+      // no-op: keep previous map center/zoom, show message in UI
+      return;
+    }
+
+    if (filteredCenters.length === 1) {
+      const c = filteredCenters[0];
+      setMapState({
+        center: { lat: c.lat, lng: c.lng },
+        zoom: 14, // closer
+        bbox: null,
+      });
+      return;
+    }
+
+    // Multiple centers: compute a bbox that fits all
+    const bbox = computeBBox(filteredCenters);
+    if (bbox) {
+      // For OSM embed using bbox, we also place marker roughly at the closest center
+      const origin = userLoc || DEFAULT_CENTER;
+      const sorted = [...filteredCenters].sort(
+        (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
+      );
+      const top = sorted[0] || filteredCenters[0];
+      setMapState({
+        center: { lat: top.lat, lng: top.lng }, // used for marker param
+        zoom: 12, // zoom is ignored by bbox but keep for fallback
+        bbox,
+      });
+    } else {
+      // Fallback: center to closest
+      const origin = userLoc || DEFAULT_CENTER;
+      const sorted = [...filteredCenters].sort(
+        (a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0)
+      );
+      const top = sorted[0];
+      setMapState({
+        center: { lat: top.lat, lng: top.lng },
+        zoom: 12,
+        bbox: null,
+      });
+    }
+  }, [
+    debouncedQ,
+    brand,
+    selected?.id, // re-run when selection changes
+    filteredCenters,
+    userLoc?.lat,
+    userLoc?.lng,
+  ]);
+
+  // Build OSM map URL from current mapState (bbox preferred)
+  const buildOsmUrl = () => {
+    const { center, zoom, bbox } = mapState;
+    if (bbox) {
+      // bbox order: west,south,east,north
+      return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.west},${bbox.south},${bbox.east},${bbox.north}&layer=mapnik&marker=${center.lat},${center.lng}`;
+    }
+    const span = 0.2; // fallback span window around center if bbox not set
+    const west = center.lng - span;
+    const south = center.lat - span;
+    const east = center.lng + span;
+    const north = center.lat + span;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${west},${south},${east},${north}&layer=mapnik&marker=${center.lat},${center.lng}&zoom=${zoom}`;
+  };
+
+  const osmUrl = buildOsmUrl();
 
   const directionsUrl = (c) =>
     `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -203,6 +336,7 @@ export default function ServiceCenters() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by name or address"
+              aria-label="Search service centers by name or address"
             />
           </div>
           <div style={{ flex: "0 1 200px", minWidth: 180 }}>
@@ -237,7 +371,9 @@ export default function ServiceCenters() {
       ) : error ? (
         <div className="card" style={{ color: "var(--error)" }}>{error}</div>
       ) : filteredCenters.length === 0 ? (
-        <div className="card">No centers found for the current filters.</div>
+        <div className="card">
+          No centers found for the current filters. Try adjusting your search or selecting a different brand.
+        </div>
       ) : (
         <div className="grid">
           {filteredCenters.map((c) => {
