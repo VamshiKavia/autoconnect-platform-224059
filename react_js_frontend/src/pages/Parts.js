@@ -94,6 +94,20 @@ export default function Parts() {
       alt: "Mechanic inspecting a car engine bay with components visible",
       specs: ["OEM components", "Dyno tested", "Warranty-backed"],
     },
+    {
+      key: "car-system",
+      title: "Car System",
+      description:
+        "Infotainment, navigation, connectivity, and diagnostics for a smarter drive.",
+      img: "/assets/car-system-navigation-interface.jpg",
+      alt: "Car system navigation interface",
+      specs: [
+        "Touchscreen display",
+        "Bluetooth / CarPlay / Android Auto",
+        "OTA updates & diagnostics",
+      ],
+      cta: "View details",
+    },
   ];
 
   return (
