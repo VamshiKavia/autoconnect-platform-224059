@@ -11,7 +11,7 @@ import { apiGet } from "../api/client";
  * - Filters:
  *    - q: text search across name/address
  *    - type: authorized | multi-brand | both (client-side mock)
- *    - brand: all (placeholder for future)
+ *    - brand: All | HYUNDAI | TOYATO | SUZUKI | BMW | AUDI | BENZ
  * - Map: OpenStreetMap iframe centered on selected center; click a card to highlight and recenter
  * - Directions: Google Maps link using lat,lng
  *
@@ -24,12 +24,23 @@ export default function ServiceCenters() {
   const DEFAULT_CENTER = { lat: 12.9022, lng: 77.5660 };
   const DEFAULT_RADIUS_KM = 20;
 
+  // Allowed brand options per requirement (single-select dropdown)
+  const BRAND_OPTIONS = [
+    { value: "all", label: "All brands" },
+    { value: "HYUNDAI", label: "HYUNDAI" },
+    { value: "TOYATO", label: "TOYATO" }, // note: spelled as provided
+    { value: "SUZUKI", label: "SUZUKI" },
+    { value: "BMW", label: "BMW" },
+    { value: "AUDI", label: "AUDI" },
+    { value: "BENZ", label: "BENZ" },
+  ];
+
   // UI state
   const [centers, setCenters] = useState([]);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [type, setType] = useState("both"); // authorized | multi-brand | both
-  const [brand, setBrand] = useState("all"); // placeholder for future use
+  const [brand, setBrand] = useState("all"); // All by default as requested
   const [selectedId, setSelectedId] = useState(null);
   const [userLoc, setUserLoc] = useState(null); // {lat,lng} if geolocation granted
   const [loading, setLoading] = useState(true);
@@ -106,6 +117,17 @@ export default function ServiceCenters() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLoc?.lat, userLoc?.lng]);
 
+  // Helper to simulate a brand for each center deterministically (until backend provides it)
+  // We derive a pseudo-brand from the center id to keep it stable across renders and searches.
+  const inferBrand = (centerId) => {
+    if (!centerId) return "HYUNDAI";
+    const brands = BRAND_OPTIONS.map(b => b.value).filter(v => v !== "all");
+    // simple hash: sum char codes mod brands.length
+    let sum = 0;
+    for (let i = 0; i < centerId.length; i++) sum += centerId.charCodeAt(i);
+    return brands[sum % brands.length];
+  };
+
   // Derived filtered list (client-side for type/brand and q safety)
   const filteredCenters = useMemo(() => {
     const qLower = q.trim().toLowerCase();
@@ -114,15 +136,19 @@ export default function ServiceCenters() {
         !qLower ||
         (c.name || "").toLowerCase().includes(qLower) ||
         (c.address || "").toLowerCase().includes(qLower);
-      // In absence of real type/brand on backend data, simulate:
-      // Even indices -> "authorized", odd -> "multi-brand"
+
+      // In absence of real type on backend data, simulate from id length:
       const isAuthorized = (c.id || "").length % 2 === 0;
       const typeOk =
         type === "both" ||
         (type === "authorized" && isAuthorized) ||
         (type === "multi-brand" && !isAuthorized);
 
-      const brandOk = brand === "all"; // placeholder hook for future brand data
+      // Brand filter: if All, accept all; otherwise match our inferred brand OR backend-provided c.brand if present
+      const inferred = inferBrand(c.id);
+      const centerBrand = (c.brand || inferred || "").toUpperCase();
+      const brandOk = brand === "all" || centerBrand === brand;
+
       return matchesQ && typeOk && brandOk;
     });
 
@@ -195,15 +221,18 @@ export default function ServiceCenters() {
               <option value="multi-brand">Multi-brand</option>
             </select>
           </div>
-          <div style={{ flex: "0 1 180px", minWidth: 160 }}>
+          <div style={{ flex: "0 1 200px", minWidth: 180 }}>
             <label className="label" htmlFor="brand">Brand</label>
             <select
               id="brand"
               className="input"
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
+              aria-label="Filter by Brand"
             >
-              <option value="all">All brands</option>
+              {BRAND_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -229,6 +258,9 @@ export default function ServiceCenters() {
         <div className="grid">
           {filteredCenters.map((c) => {
             const isSelected = c.id === selectedId;
+            // Determine display brand for the card (to help users see which brand matched)
+            const displayBrand = (c.brand || inferBrand(c.id) || "").toUpperCase();
+
             return (
               <div
                 key={c.id}
@@ -253,9 +285,14 @@ export default function ServiceCenters() {
               >
                 <div className="row" style={{ justifyContent: "space-between" }}>
                   <strong>{c.name}</strong>
-                  {typeof c.distance_km === "number" ? (
-                    <span className="subtitle">{c.distance_km.toFixed(2)} km</span>
-                  ) : null}
+                  <div className="row" style={{ gap: 8 }}>
+                    {typeof c.distance_km === "number" ? (
+                      <span className="subtitle">{c.distance_km.toFixed(2)} km</span>
+                    ) : null}
+                    <span className="subtitle" aria-label="Supported brand">
+                      {displayBrand}
+                    </span>
+                  </div>
                 </div>
                 <div className="subtitle" style={{ marginTop: 6 }}>{c.address}</div>
                 <div style={{ color: "var(--muted)", fontSize: 13 }}>
