@@ -4,6 +4,7 @@ import getSupabaseClient from "../../lib/supabaseClient";
 import { generateMockBookingReference } from "./mocks";
 import { addMockBooking } from "./mockStore";
 import useUser from "../../hooks/useUser";
+import SuccessToast from "../../components/SuccessToast.jsx";
 
 /**
 // PUBLIC_INTERFACE
@@ -19,6 +20,7 @@ export default function ReviewStep({ canSubmit }) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [success, setSuccess] = useState(null);
+  const [showToast, setShowToast] = useState(false);
 
   const requiredReady = useMemo(() => {
     const hasVehicle = !!(vehicle && (vehicle.make || vehicle.model));
@@ -89,6 +91,7 @@ export default function ReviewStep({ canSubmit }) {
         });
 
         setSuccess({ id: mockRecord.id, _note: "Supabase disabled: booking stored locally." });
+        setShowToast(true);
         setSubmitting(false);
         return;
       }
@@ -127,6 +130,7 @@ export default function ReviewStep({ canSubmit }) {
       if (error) throw error;
 
       setSuccess({ id: data?.id });
+      setShowToast(true);
     } catch (e) {
       setErrorMsg(e?.message || "Failed to create booking. Please try again.");
     } finally {
@@ -166,6 +170,19 @@ export default function ReviewStep({ canSubmit }) {
   return (
     <section className="card" aria-labelledby="review-step-title">
       <h3 id="review-step-title" className="section-title">Review & Confirm</h3>
+      {showToast && (
+        <SuccessToast
+          message="Successfully submitted"
+          detail={
+            success?.id
+              ? <>Reference: <strong>#{String(success.id)}</strong></>
+              : null
+          }
+          onClose={() => setShowToast(false)}
+          durationMs={4000}
+          role="status"
+        />
+      )}
       <p className="subtitle">Verify your details before submitting.</p>
 
       <div className="grid" role="list" aria-label="Booking summary">
