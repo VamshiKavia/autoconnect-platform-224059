@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { BOOKING_STEPS, BookingProvider } from "./context";
 import VehicleStep from "./VehicleStep";
 import ServiceTypeStep from "./ServiceTypeStep";
@@ -9,23 +9,7 @@ import ReviewStep from "./ReviewStep";
 
 /**
 // PUBLIC_INTERFACE
- * BookServicePage - Multi-step booking UI with 6 steps:
- * 1) Select Vehicle
- * 2) Select Service Type
- * 3) Choose Service Center
- * 4) Pick Date & Time
- * 5) Enter Details & Preferences
- * 6) Review & Confirm
- *
- * - Uses a lightweight context to persist selections across steps.
- * - Mock/static data for service types, centers, and slot availability.
- * - Each step validates minimally; Next disabled until valid.
- * - Progress indicator/stepper and Back/Next controls.
- * - Submit disabled until all steps valid; no backend call yet.
- *
- * TODO(API):
- * - Wire up FastAPI endpoints for service types, centers, slots, and booking creation.
- * - Replace placeholders with apiGet/apiPost hooks and loading/error states.
+ * BookServicePage - Multi-step booking UI wired to Supabase for reads and booking insert.
  */
 export default function BookServicePage() {
   return (
@@ -67,6 +51,7 @@ function StepperArea() {
     setStep((s) => Math.max(0, s - 1));
   }
 
+  // We let ReviewStep own the actual insert; the Submit button in nav is removed for simplicity
   return (
     <>
       <Stepper current={step} />
@@ -77,15 +62,7 @@ function StepperArea() {
         {step === 2 && <CenterStep onValidChange={(v) => updateValidity(2, v)} />}
         {step === 3 && <DateTimeStep onValidChange={(v) => updateValidity(3, v)} />}
         {step === 4 && <DetailsStep onValidChange={(v) => updateValidity(4, v)} />}
-        {step === 5 && (
-          <ReviewStep
-            canSubmit={canSubmit}
-            onConfirm={() => {
-              // Placeholder confirmation; in future, post to backend and route to a success screen
-              alert("Booking submitted (mock). Backend integration coming soon.");
-            }}
-          />
-        )}
+        {step === 5 && <ReviewStep canSubmit={canSubmit} />}
       </section>
 
       {/* Navigation controls */}
@@ -94,8 +71,8 @@ function StepperArea() {
           Back
         </button>
         {atLast ? (
-          <button className="btn" disabled={!canSubmit} aria-disabled={!canSubmit} onClick={() => {}}>
-            Submit
+          <button className="btn" disabled aria-disabled>
+            Review & Confirm
           </button>
         ) : (
           <button className="btn" onClick={next} disabled={!canNext} aria-disabled={!canNext}>

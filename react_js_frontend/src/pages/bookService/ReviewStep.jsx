@@ -1,23 +1,84 @@
-import React from "react";
+import React, { useState } from "react";
 import { BOOKING_STEPS, useBooking } from "./context";
+import { useAuth } from "../../context/AuthContext";
+import getSupabaseClient from "../../lib/supabaseClient";
 
 /**
 // PUBLIC_INTERFACE
- * ReviewStep - Step 6: Summarize all selections and provide confirm action.
+ * ReviewStep - Step 6: Summarize selections and confirm to create booking in Supabase.
  *
- * No API integration yet; Confirm triggers a placeholder alert.
+ * Insert:
+ *   supabase.from('bookings')
+ *     .insert([{
+ *       user_id, vehicle_id, service_type_id, service_center_id,
+ *       datetime, notes, status
+ *     }]).select().single()
+ *
+ * On success: show success state with booking id reference.
+ * On error: show error banner (handle RLS/permission friendly messaging).
  */
-export default function ReviewStep({ canSubmit, onConfirm }) {
+export default function ReviewStep({ canSubmit }) {
+  const { user } = useAuth();
   const { vehicle, serviceType, center, dateTime, details } = useBooking();
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
+  const [success, setSuccess] = useState(null); // store inserted row
+
+  async function onConfirm() {
+    if (!canSubmit || submitting) return;
+    setErr("");
+    setSubmitting(true);
+    try {
+      const supabase = getSupabaseClient();
+
+      // Map collected values to DB fields
+      const payload = {
+        user_id: user?.id || null,
+        vehicle_id: vehicle?.id || null, // may be null if manual entry
+        service_type_id: serviceType?.id || null,
+        service_center_id: center?.id || null,
+        datetime: dateTime?.datetimeISO || null,
+        notes: String(details?.notes || ""),
+        status: "pending",
+      };
+
+      const { data, error } = await supabase
+        .from("bookings")
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+      setSuccess(data || { id: "—" });
+    } catch (e) {
+      const msg = (e?.message || "").toLowerCase();
+      if (msg.includes("permission") || msg.includes("rls") || msg.includes("not authorized")) {
+        setErr("You do not have permission to create a booking. Please sign in or contact support.");
+      } else if (msg.includes("foreign key") || msg.includes("violates")) {
+        setErr("One or more selected items are invalid or no longer available. Please review and try again.");
+      } else {
+        setErr("Failed to create booking. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="card" aria-labelledby="review-step-title">
       <h3 id="review-step-title" className="section-title">Review & Confirm</h3>
       <p className="subtitle">Verify your details before submitting.</p>
 
+      {err && <div className="card" style={{ color: "var(--error)" }}>{err}</div>}
+      {success && (
+        <div className="card" style={{ color: "var(--success)" }}>
+          Booking confirmed. Reference #{success?.id}
+        </div>
+      )}
+
       <div className="grid" role="list" aria-label="Booking summary">
         <SummaryCard title="Vehicle" index={0}>
-          <div>{(vehicle?.make || "-")} {(vehicle?.model || "")}</div>
+          <div>{(vehicle?.make || "-")} {(vehicle?.model || "")} {vehicle?.year ? `• ${vehicle.year}` : ""}</div>
           <div className="subtitle">VIN: {vehicle?.vin || "-"}</div>
         </SummaryCard>
 
@@ -26,11 +87,11 @@ export default function ReviewStep({ canSubmit, onConfirm }) {
           {serviceType && (
             <>
               <div className="subtitle">
-                ${serviceType.price} • {serviceType.duration_min} min
+                {serviceType?.price != null ? `$${serviceType.price}` : "$—"} • {serviceType?.duration_min || "—"} min
               </div>
-              {serviceType.note ? (
+              {serviceType?.description ? (
                 <div className="subtitle" style={{ marginTop: 4 }}>
-                  {serviceType.note}
+                  {serviceType.description}
                 </div>
               ) : null}
             </>
@@ -69,15 +130,11 @@ export default function ReviewStep({ canSubmit, onConfirm }) {
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
         <button
           className="btn"
-          onClick={() => {
-            if (!canSubmit) return;
-            // TODO(API): Replace with POST /api/bookings call and proper error handling
-            onConfirm?.();
-          }}
-          disabled={!canSubmit}
-          aria-disabled={!canSubmit}
+          onClick={onConfirm}
+          disabled={!canSubmit || submitting}
+          aria-disabled={!canSubmit || submitting}
         >
-          Confirm Booking
+          {submitting ? "Submitting..." : success ? "Booked" : "Confirm Booking"}
         </button>
       </div>
 
