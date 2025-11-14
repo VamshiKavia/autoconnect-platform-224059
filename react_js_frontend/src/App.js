@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, NavLink, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import "./theme.css";
 import Home from "./pages/Home";
 import Services from "./pages/Services";
@@ -7,74 +7,44 @@ import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import { useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Header from "./components/Header";
 
 /**
 // PUBLIC_INTERFACE
- * App - Application shell with navigation and route definitions.
+ * App - Application shell with global authentication and route definitions.
  *
- * - Auth-aware header shows Login when logged out; Profile and Logout when logged in.
- * - /profile protected via ProtectedRoute; /parts remains public but shows a login prompt if unauthenticated.
- * - Uses AuthProvider wrapper (in index.js) for auth context.
+ * Behavior:
+ * - Entire route tree is protected by default using ProtectedRoute.
+ * - /login (and 404 fallback to /login) remain publicly accessible.
+ * - When authenticated, a persistent Header shows avatar/name and a user menu.
+ * - After successful login, user is redirected to originally requested page.
+ * - AuthProvider is provided at the root in index.js.
  */
 function App() {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-
-  async function handleLogout() {
-    try {
-      await signOut();
-      navigate("/", { replace: true });
-    } catch {
-      // ignore UI errors, minimalistic UX
-    }
-  }
+  const { user, loading } = useAuth();
 
   return (
     <div className="app-shell">
-      <header className="navbar">
-        <div className="nav-container">
-          <div className="brand">Ocean Motors</div>
-          <nav className="nav-links" aria-label="Primary">
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Parts</NavLink>
-
-            {!user ? (
-              <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/login">Login</NavLink>
-            ) : (
-              <>
-                <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/profile">Profile</NavLink>
-                <button className="nav-link" onClick={handleLogout} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
-                  Logout
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      {/* Header only when authenticated */}
+      {user ? <Header /> : null}
 
       <main className="main">
         <Routes>
-          {/* Public */}
-          <Route path="/" element={<Home />} />
-          <Route path="/services" element={<Services />} />
-          {/* Parts is public but should encourage login when unauthenticated.
-              The Parts component will render a login prompt banner when user is not logged in. */}
-          <Route path="/parts" element={<Parts />} />
+          {/* Public login route remains accessible when logged out */}
           <Route path="/login" element={<Login />} />
 
-          {/* Protected */}
+          {/* Protected layout wrapper for all other routes */}
           <Route
-            path="/profile"
+            path="/*"
             element={
               <ProtectedRoute>
-                <Profile />
+                <AppRoutes />
               </ProtectedRoute>
             }
           />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Fallback: when unauthenticated and unknown route, redirect to /login */}
+          <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
         </Routes>
       </main>
 
@@ -82,6 +52,24 @@ function App() {
         <div className="container">© {new Date().getFullYear()} Ocean Motors</div>
       </footer>
     </div>
+  );
+}
+
+/**
+// PUBLIC_INTERFACE
+ * AppRoutes - Internal component that holds authenticated application routes.
+ * Shown only inside ProtectedRoute. Keeps /profile accessible to authenticated users.
+ */
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/services" element={<Services />} />
+      <Route path="/parts" element={<Parts />} />
+      <Route path="/profile" element={<Profile />} />
+      {/* Catch-all inside protected area */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

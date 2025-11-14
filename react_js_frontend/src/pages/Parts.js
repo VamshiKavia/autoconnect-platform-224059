@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { apiGet } from "../api/client";
-import PartsList from "../components/PartsList";
-import useUser from "../hooks/useUser";
 
 /**
 // PUBLIC_INTERFACE
@@ -11,12 +8,11 @@ import useUser from "../hooks/useUser";
  * This page includes:
  * - Featured categories (static cards following Ocean Professional theme)
  * - PartsList component backed by Supabase "Car parts" (read-only)
- * - Login prompt banner when user is not authenticated
+ * - Global auth enforced via ProtectedRoute at app level (no local login prompt)
  */
 export default function Parts() {
   const [parts, setParts] = useState([]);
   const [error, setError] = useState("");
-  const { isAuthenticated } = useUser();
 
   // Reduced motion preference for animation safety
   const prefersReducedMotion = useMemo(() => {
@@ -58,7 +54,6 @@ export default function Parts() {
       key: "wheels",
       title: "Wheels",
       description: "Durable alloy and steel wheel options engineered for stability and comfort.",
-      // Updated to use existing Car Engine asset as requested
       img: "/assets/29765.jpg",
       alt: "Close-up of mechanic's hands working on a car wheel during service",
       specs: ["Sizes: 15\"–20\"", "Bolt patterns: 4–5 lug", "Finish: Gloss / Matte"],
@@ -67,7 +62,6 @@ export default function Parts() {
       key: "magwheels",
       title: "Magwheels",
       description: "Lightweight magnesium alloy wheels for enhanced performance and handling.",
-      // Updated to use provided Magwheels image asset
       img: "/assets/20251113_121007_fe078699-e9e5-4446-80b1-1252a61b6d00.jpg",
       alt: "Magwheels product photo",
       specs: ["Ultra-light build", "Heat-dissipative design", "Anti-corrosion coating"],
@@ -117,21 +111,6 @@ export default function Parts() {
       <h2 className="section-title">Spare Parts</h2>
       <p className="subtitle">Quality parts for reliable performance.</p>
 
-      {/* Optional login prompt */}
-      {!isAuthenticated && (
-        <div className="card" style={{ marginBottom: 16, borderStyle: "dashed" }}>
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <strong>Sign in to personalize your parts experience</strong>
-              <div className="subtitle" style={{ marginTop: 6 }}>
-                Save favorites and see personalized recommendations.
-              </div>
-            </div>
-            <Link to="/login" className="btn">Login</Link>
-          </div>
-        </div>
-      )}
-
       {/* Featured spare parts cards with placeholder images */}
       <section aria-label="Featured spare parts categories" style={{ marginBottom: 16 }}>
         <div className="launch-grid">
@@ -145,11 +124,6 @@ export default function Parts() {
               aria-describedby={`${item.key}-desc`}
             >
               <figure style={{ margin: 0 }}>
-                {/* Placeholder image area
-                   To swap to final image:
-                   1) Copy final asset to public/assets (e.g., public/assets/wheels.png)
-                   2) Update the src below to /assets/wheels.png
-                   3) Adjust width/height if needed and keep alt text meaningful */}
                 <img
                   src={item.img}
                   alt={item.alt}
