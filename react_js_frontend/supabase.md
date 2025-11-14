@@ -1,6 +1,6 @@
 # Supabase Integration - Frontend
 
-This app uses Supabase Auth (email/password) and Supabase Database (read-only examples: "Car parts", user-specific "user_vehicles", and public "service_types").
+This app uses Supabase Auth (email/password) and Supabase Database (read-only examples: "Car parts", user-specific "user_vehicles", public "service_types", and public "service_centers").
 
 Follow these steps to configure and verify:
 
@@ -62,7 +62,13 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
     for select
     using (active = true);
 
-  - TODO(ADMIN-WRITES): Admin interfaces to create/update/deactivate service types will require insert/update policies. Not implemented in this app.
+- Table: service_centers
+  - Columns (used by UI): id, name, address_line1, address_line2, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours (json), active
+  - The UI reads only rows where `active = true`.
+  - RLS: If this is public information, you may allow anon read for active centers:
+    policy "Public read of active service centers" on service_centers
+    for select
+    using (active = true);
 
 ## 5) Frontend behavior
 
@@ -79,17 +85,22 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
   - Selecting a saved vehicle populates the form (make, model, vin, nickname); VIN remains optional.
   - Manual entry is still supported and drives validation:
     - Make, model required; VIN optional.
-  - TODOs for future enhancements:
-    - Add/edit/delete vehicle mutations (INSERT/UPDATE/DELETE).
 
 - `src/pages/bookService/ServiceTypeStep.jsx`
-  - Replaces mock data with Supabase query:
+  - Reads from Supabase:
     - `.from("service_types").select("id, name, description, base_price, duration_minutes, active").eq("active", true)`
   - Implements loading, empty, and error states.
-  - Maps fields to existing booking context usage:
+  - Maps to booking context:
     - price <- base_price
     - duration_min <- duration_minutes
-  - Selection flows to booking context and is shown in the Review step.
+
+- `src/pages/bookService/CenterStep.jsx`
+  - Reads from Supabase:
+    - `.from("service_centers").select("id, name, address_line1, address_line2, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours, active").eq("active", true)`
+  - Implements loading, empty, and error states.
+  - Maps fields and persists selection in context. Review step shows `center.name` and `center.address`.
+  - Optional geolocation:
+    - If the browser provides location, we compute a simple Haversine distance in km; if denied/unavailable, show a placeholder.
 
 - `src/components/PartsList.js` continues to read "Car parts" (read-only).
 
@@ -97,6 +108,7 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
 
 - Start frontend: `npm start` at port 3000
 - Go to http://localhost:3000/login, create/sign in to an account (for user_vehicles).
+
 - Seed tables as needed:
 
   -- user_vehicles (per-user)
@@ -110,13 +122,19 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
     ('Brake Inspection', 'Brake pads, rotors, and fluid check', 99, 45, true),
     ('AC Service', 'AC gas refill and leak detection', 129, 60, true);
 
-- Navigate to /book-service:
-  - Step 1 (Select Vehicle) should show your saved vehicles when authenticated.
-  - Step 2 (Select Service Type) should list active service types from Supabase with loading/empty/error states.
-  - Selecting a service type should reflect in the Review step with price and duration.
+  -- service_centers (public or restricted read)
+  insert into service_centers (name, address_line1, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours, active)
+  values
+    ('Ocean Motors Service - Downtown', '15 Bull Temple Road', 'Bengaluru', 'KA', '560004', 'IN', 12.9036, 77.5143, '+91 98765 43210', 'downtown@oceanmotors.example', '{"mon_fri":"9:00-18:00","sat":"10:00-16:00","sun":"closed"}', true);
 
-If you see "Failed to load service types.":
-- Ensure `service_types` table exists with the columns above.
+- Navigate to /book-service:
+  - Step 1 (Select Vehicle) lists user vehicles (if any).
+  - Step 2 (Select Service Type) lists active service types from Supabase with loading/empty/error states.
+  - Step 3 (Choose Service Center) lists active service centers from Supabase with loading/empty/error states and optional distance.
+  - Review step shows selected center name and address.
+
+If you see "Failed to load service centers.":
+- Ensure `service_centers` table exists with the columns above.
 - Confirm RLS policies allow select for your intended audience (anon or authenticated).
 - Verify env vars (REACT_APP_SUPABASE_URL/KEY) and restart dev server.
 
