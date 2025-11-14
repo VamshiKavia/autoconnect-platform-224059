@@ -44,8 +44,19 @@ export default function Login() {
       }
       navigate(from, { replace: true });
     } catch (e2) {
-      const msg = e2?.message || authError || "Authentication failed";
-      setErr(msg);
+      const raw = (e2?.message || authError || "Authentication failed").toString();
+      const lower = raw.toLowerCase();
+      let friendly = raw;
+      if (lower.includes("invalid") && lower.includes("credentials")) {
+        friendly = mode === "signup"
+          ? "Signup failed: please ensure your email is valid and your password meets the policy."
+          : "Invalid email or password.";
+      } else if (lower.includes("password")) {
+        friendly = "Password does not meet policy requirements.";
+      } else if (lower.includes("rate") && lower.includes("limit")) {
+        friendly = "Too many attempts. Try again later.";
+      }
+      setErr(friendly);
     } finally {
       setLoading(false);
     }

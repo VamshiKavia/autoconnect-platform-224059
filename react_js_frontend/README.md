@@ -21,7 +21,7 @@ The frontend uses the following env vars (do not hardcode secrets):
 - REACT_APP_SUPABASE_URL
 - REACT_APP_SUPABASE_KEY
 
-Create a .env file locally as needed. See .env.example for typical values.
+Create a .env file locally as needed. See .env.example for typical values. Ensure REACT_APP_SUPABASE_URL, REACT_APP_SUPABASE_KEY, and REACT_APP_FRONTEND_URL are set correctly and that the redirect URL is allowed in Supabase Auth settings.
 
 ### Supabase integration
 

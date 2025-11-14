@@ -110,7 +110,18 @@ export function AuthProvider({ children }) {
     async (email, password, metadata = {}) => {
       setErr("");
       // Use redirect URL from env for email-confirm flows if needed
-      const siteUrl = process.env.REACT_APP_FRONTEND_URL || window.location.origin;
+      let siteUrl = process.env.REACT_APP_FRONTEND_URL || window.location.origin;
+      try {
+        // Ensure absolute URL and no trailing slash, then append /login
+        const u = new URL(siteUrl);
+        u.pathname = u.pathname.replace(/\/+$/, "");
+        siteUrl = u.toString();
+      } catch {
+        // eslint-disable-next-line no-console
+        console.warn("[auth] REACT_APP_FRONTEND_URL is not a valid absolute URL. Falling back to window.location.origin");
+        siteUrl = window.location.origin;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -120,8 +131,21 @@ export function AuthProvider({ children }) {
         },
       });
       if (error) {
-        setErr(error.message);
-        throw error;
+        // Map common Supabase auth errors to friendlier messages
+        const code = (error?.name || error?.status || "").toString().toLowerCase();
+        let friendly = error.message;
+        const msg = (error?.message || "").toLowerCase();
+        if (msg.includes("invalid") && msg.includes("credentials")) {
+          friendly = "Invalid signup details. Check password policy and email format.";
+        } else if (msg.includes("password")) {
+          friendly = "Password does not meet policy. Use a stronger password.";
+        } else if (msg.includes("rate") && msg.includes("limit")) {
+          friendly = "Too many attempts. Please try again later.";
+        }
+        setErr(friendly);
+        const err = new Error(friendly);
+        err.original = error;
+        throw err;
       }
       return data;
     },
