@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { BOOKING_STEPS, BookingProvider } from "./context";
 import VehicleStep from "./VehicleStep";
 import ServiceTypeStep from "./ServiceTypeStep";
@@ -6,12 +6,26 @@ import CenterStep from "./CenterStep";
 import DateTimeStep from "./DateTimeStep";
 import DetailsStep from "./DetailsStep";
 import ReviewStep from "./ReviewStep";
-import { useAuth } from "../../context/AuthContext";
-import SignInRequiredBanner from "./SignInRequiredBanner.jsx";
 
 /**
 // PUBLIC_INTERFACE
- * BookServicePage - Multi-step booking UI wired to Supabase for reads and booking insert.
+ * BookServicePage - Multi-step booking UI with 6 steps:
+ * 1) Select Vehicle
+ * 2) Select Service Type
+ * 3) Choose Service Center
+ * 4) Pick Date & Time
+ * 5) Enter Details & Preferences
+ * 6) Review & Confirm
+ *
+ * - Uses a lightweight context to persist selections across steps.
+ * - Mock/static data for service types, centers, and slot availability.
+ * - Each step validates minimally; Next disabled until valid.
+ * - Progress indicator/stepper and Back/Next controls.
+ * - Submit disabled until all steps valid; no backend call yet.
+ *
+ * TODO(API):
+ * - Wire up FastAPI endpoints for service types, centers, slots, and booking creation.
+ * - Replace placeholders with apiGet/apiPost hooks and loading/error states.
  */
 export default function BookServicePage() {
   return (
@@ -33,7 +47,6 @@ export default function BookServicePage() {
 }
 
 function StepperArea() {
-  const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [validMap, setValidMap] = useState({ 0: false, 1: false, 2: false, 3: false, 4: false });
   const atFirst = step === 0;
@@ -48,22 +61,12 @@ function StepperArea() {
 
   function next() {
     if (!canNext) return;
-
-    // Prevent navigating to Review (index 5) if not authenticated
-    setStep((s) => {
-      const target = Math.min(BOOKING_STEPS.length - 1, s + 1);
-      if (!user && target === 5) {
-        // Stay on Details step and show banner below
-        return 4;
-      }
-      return target;
-    });
+    setStep((s) => Math.min(BOOKING_STEPS.length - 1, s + 1));
   }
   function back() {
     setStep((s) => Math.max(0, s - 1));
   }
 
-  // We let ReviewStep own the actual insert; the Submit button in nav is removed for simplicity
   return (
     <>
       <Stepper current={step} />
@@ -73,15 +76,16 @@ function StepperArea() {
         {step === 1 && <ServiceTypeStep onValidChange={(v) => updateValidity(1, v)} />}
         {step === 2 && <CenterStep onValidChange={(v) => updateValidity(2, v)} />}
         {step === 3 && <DateTimeStep onValidChange={(v) => updateValidity(3, v)} />}
-        {step === 4 && (
-          <>
-            <DetailsStep onValidChange={(v) => updateValidity(4, v)} />
-            {!user && (
-              <SignInRequiredBanner id="sign-in-required-inline" focusOnMount={false} />
-            )}
-          </>
+        {step === 4 && <DetailsStep onValidChange={(v) => updateValidity(4, v)} />}
+        {step === 5 && (
+          <ReviewStep
+            canSubmit={canSubmit}
+            onConfirm={() => {
+              // Placeholder confirmation; in future, post to backend and route to a success screen
+              alert("Booking submitted (mock). Backend integration coming soon.");
+            }}
+          />
         )}
-        {step === 5 && <ReviewStep canSubmit={canSubmit} />}
       </section>
 
       {/* Navigation controls */}
@@ -90,8 +94,8 @@ function StepperArea() {
           Back
         </button>
         {atLast ? (
-          <button className="btn" disabled aria-disabled>
-            Review & Confirm
+          <button className="btn" disabled={!canSubmit} aria-disabled={!canSubmit} onClick={() => {}}>
+            Submit
           </button>
         ) : (
           <button className="btn" onClick={next} disabled={!canNext} aria-disabled={!canNext}>
