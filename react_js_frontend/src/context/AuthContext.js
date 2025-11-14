@@ -94,11 +94,34 @@ export function AuthProvider({ children }) {
 
   const signIn = useCallback(
     async (email, password) => {
+      /**
+       * Attempt email/password sign-in and map common errors to friendlier messages.
+       * Handles:
+       *  - Invalid login credentials (auth/invalid-credentials)
+       *  - Email not confirmed (auth/user-not-confirmed)
+       *  - Rate limiting / too many requests
+       *  - Redirect URL misconfiguration
+       */
       setErr("");
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setErr(error.message);
-        throw error;
+        const raw = (error?.message || "").toLowerCase();
+        let friendly = error.message;
+
+        if (raw.includes("email not confirmed") || raw.includes("confirm") || raw.includes("not confirmed")) {
+          friendly = "Email not confirmed. Please check your inbox for the confirmation link.";
+        } else if (raw.includes("invalid") && raw.includes("credentials")) {
+          friendly = "Invalid email or password.";
+        } else if (raw.includes("redirect") || raw.includes("url") || raw.includes("callback")) {
+          friendly = "Login failed due to redirect URL configuration. Please contact support.";
+        } else if (raw.includes("rate") && raw.includes("limit")) {
+          friendly = "Too many attempts. Please try again later.";
+        }
+
+        setErr(friendly);
+        const e = new Error(friendly);
+        e.original = error;
+        throw e;
       }
       // session state will be updated by onAuthStateChange
       return data;
@@ -112,14 +135,19 @@ export function AuthProvider({ children }) {
       // Use redirect URL from env for email-confirm flows if needed
       let siteUrl = process.env.REACT_APP_FRONTEND_URL || window.location.origin;
       try {
-        // Ensure absolute URL and no trailing slash, then append /login
+        // Ensure absolute URL and no trailing slash
         const u = new URL(siteUrl);
-        u.pathname = u.pathname.replace(/\/+$/, "");
-        siteUrl = u.toString();
+        // Normalize pathname to have no trailing slash
+        u.pathname = (u.pathname || "/").replace(/\/*$/, "");
+        // Ensure protocol/host exist
+        if (!u.protocol || !u.host) {
+          throw new Error("invalid frontend url");
+        }
+        siteUrl = u.toString().replace(/\/+$/, "");
       } catch {
         // eslint-disable-next-line no-console
         console.warn("[auth] REACT_APP_FRONTEND_URL is not a valid absolute URL. Falling back to window.location.origin");
-        siteUrl = window.location.origin;
+        siteUrl = window.location.origin.replace(/\/+$/, "");
       }
 
       // Only include display_name if provided; do not send avatar_url
@@ -138,20 +166,25 @@ export function AuthProvider({ children }) {
       });
       if (error) {
         // Map common Supabase auth errors to friendlier messages
-        const code = (error?.name || error?.status || "").toString().toLowerCase();
-        let friendly = error.message;
         const msg = (error?.message || "").toLowerCase();
+
+        let friendly = error.message;
         if (msg.includes("invalid") && msg.includes("credentials")) {
           friendly = "Invalid signup details. Check password policy and email format.";
-        } else if (msg.includes("password")) {
+        } else if (msg.includes("password") || msg.includes("weak")) {
           friendly = "Password does not meet policy. Use a stronger password.";
         } else if (msg.includes("rate") && msg.includes("limit")) {
           friendly = "Too many attempts. Please try again later.";
+        } else if (msg.includes("email") && msg.includes("exists")) {
+          friendly = "An account with this email already exists. Try signing in.";
+        } else if (msg.includes("redirect") || msg.includes("url") || msg.includes("callback")) {
+          friendly = "Signup failed due to redirect URL configuration. Please contact support.";
         }
+
         setErr(friendly);
-        const err = new Error(friendly);
-        err.original = error;
-        throw err;
+        const e = new Error(friendly);
+        e.original = error;
+        throw e;
       }
       return data;
     },

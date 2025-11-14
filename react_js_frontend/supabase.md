@@ -41,14 +41,29 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
 
 ## 4) Common "invalid credentials" causes and fixes
 
-- Wrong/missing Supabase env vars:
-  - Ensure URL and anon key are correct. A wrong key or project URL can cause generic auth errors.
-- Password policy not met:
-  - Use a stronger password that meets the configured policy.
-- Redirect URL not allowed:
-  - Add http://localhost:3000 and http://localhost:3000/login to allowed redirect URLs.
-- Email confirmation required:
-  - If enabled, check your email and complete confirmation before signing in.
+If you see "Invalid email or password" even with correct credentials, check the following in order:
+
+1) Email confirmation
+- If "Confirm email" is enabled in Supabase Auth, you cannot sign in until the email is confirmed.
+- Message to look for: "Email not confirmed." — confirm the email via the link sent during sign up.
+
+2) Redirect URL configuration
+- Ensure BOTH of these are added under Authentication > URL Configuration > Redirect URLs:
+  - http://localhost:3000
+  - http://localhost:3000/login
+- Our app passes emailRedirectTo: `${REACT_APP_FRONTEND_URL}/login`. If this URL isn't on the allowlist, auth can fail with vague errors.
+
+3) Environment variables
+- REACT_APP_SUPABASE_URL must be your project URL (https://XYZ.supabase.co)
+- REACT_APP_SUPABASE_KEY must be the anon public key
+- Restart dev server after editing .env so CRA picks up new values.
+
+4) Password policy
+- Check Authentication > Providers > Email -> Password settings. Our UI requires min length 6 by default.
+- If your policy is stronger (e.g., symbols/numbers), use a stronger password.
+
+5) Rate limits
+- Supabase may rate limit repeated attempts. Wait and try later if you see rate-limit messages.
 
 ## 5) Frontend behavior
 
@@ -69,14 +84,26 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
 - Start backend (optional, only for demo REST calls): http://localhost:3001
 - Start frontend: `npm start` at port 3000
 - Go to http://localhost:3000/login
-- Try Sign Up with:
-  - Email: you@example.com
-  - Password: StrongPassword123!
-  - Display name: Your Name
-- If signup requires email confirmation, check inbox and complete; then Sign In.
+
+Create and verify a test account:
+1. Sign Up:
+   - Email: you@example.com
+   - Password: StrongPassword123!
+   - Display name: Your Name
+   - Expected: If "Confirm email" is enabled, you’ll see a success notice and receive an email.
+2. Confirm email:
+   - Click the email link; it should redirect you to http://localhost:3000/login
+   - Expected: Back on the login page without error.
+3. Sign In:
+   - Use the same email/password.
+   - Expected: Redirects to "/" and header shows your display name.
+4. Refresh:
+   - Reload the page; you should remain signed in (session persistence).
+5. Profile:
+   - Navigate to /profile, change display name, save, and see "Saved".
 
 If still seeing "invalid credentials":
-- Check browser console warnings for guidance.
+- Check browser console warnings for guidance (we surface redirect URL hints).
 - Re-validate env vars and Supabase dashboard settings above.
 - Regenerate anon key if compromised or mis-copied.
 

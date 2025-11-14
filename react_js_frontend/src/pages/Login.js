@@ -53,10 +53,14 @@ export default function Login() {
         friendly = mode === "signup"
           ? "Signup failed: please ensure your email is valid and your password meets the policy."
           : "Invalid email or password.";
-      } else if (lower.includes("password")) {
+      } else if (lower.includes("password") || lower.includes("weak")) {
         friendly = "Password does not meet policy requirements.";
       } else if (lower.includes("rate") && lower.includes("limit")) {
         friendly = "Too many attempts. Try again later.";
+      } else if (lower.includes("confirm") || lower.includes("not confirmed")) {
+        friendly = "Email not confirmed. Please check your inbox for the confirmation link.";
+      } else if (lower.includes("redirect") || lower.includes("url") || lower.includes("callback")) {
+        friendly = "Auth failed due to redirect URL configuration. Verify REACT_APP_FRONTEND_URL and Supabase Redirect URLs.";
       }
       setErr(friendly);
     } finally {
