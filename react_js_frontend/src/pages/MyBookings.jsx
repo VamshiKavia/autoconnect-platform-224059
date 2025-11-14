@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import getSupabaseClient from '../lib/supabaseClient';
 import useUser from '../hooks/useUser';
 import { isSupabaseEnabled } from '../utils/featureFlags';
-import { listMockBookingsByUser } from './bookService/mockStore';
+import { listMockBookingsByUser, subscribeMockBookingsChanged } from './bookService/mockStore';
 
 /**
  * PUBLIC_INTERFACE
@@ -78,10 +78,11 @@ export default function MyBookings() {
     }
 
     function loadMock() {
-      if (!user) return;
+      // When in mock mode, use 'mock-user' as consistent fallback identifier
+      const uid = user?.id || 'mock-user';
       setStatus('loading');
       try {
-        const data = listMockBookingsByUser(user?.id || 'mock-user');
+        const data = listMockBookingsByUser(uid);
         if (!isMounted) return;
         setBookings(data || []);
         setStatus('success');
@@ -93,15 +94,26 @@ export default function MyBookings() {
       }
     }
 
-    if (!userLoading && user) {
-      if (supabaseEnabled) loadSupabase();
-      else loadMock();
-    } else if (!userLoading && !user) {
-      setBookings([]);
-      setStatus('success');
+    // Initial load
+    if (!userLoading) {
+      if (supabaseEnabled) {
+        if (user) loadSupabase();
+        else { setBookings([]); setStatus('success'); }
+      } else {
+        loadMock();
+      }
     }
 
-    return () => { isMounted = false; };
+    // Subscribe to mock changes so list refreshes immediately after Review success
+    let unsubscribe = null;
+    if (!supabaseEnabled) {
+      unsubscribe = subscribeMockBookingsChanged(() => {
+        if (!isMounted) return;
+        loadMock();
+      });
+    }
+
+    return () => { isMounted = false; unsubscribe?.(); };
   }, [user, userLoading, supabase, supabaseEnabled]);
 
   function formatDateTime(dt) {
@@ -348,6 +360,11 @@ export default function MyBookings() {
           <p className="subtitle" style={{ margin: 0 }}>
             View your upcoming and past service bookings.
           </p>
+          {!supabaseEnabled && (
+            <p className="subtitle" style={{ margin: 0, marginTop: 4 }}>
+              TODO: Supabase disabled. Reading from local mock store.
+            </p>
+          )}
         </header>
 
         {/* Placeholder for future filters */}

@@ -6,6 +6,7 @@
 // TODO: Remove this mock store when Supabase is re-enabled.
 
 const STORAGE_KEY = 'mock_bookings_v1';
+const CHANGE_EVENT = 'mock-bookings:changed';
 
 /**
  * Safely parse JSON from localStorage.
@@ -36,6 +37,8 @@ function saveAll(items) {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items || []));
+    // Notify listeners that bookings have changed (for immediate UI refresh)
+    window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
   } catch {
     // ignore quota errors
   }
@@ -84,8 +87,21 @@ export function clearMockBookings() {
   saveAll([]);
 }
 
+/**
+ * PUBLIC_INTERFACE
+ * Subscribe to mock bookings change notifications.
+ * Returns an unsubscribe function.
+ */
+export function subscribeMockBookingsChanged(handler) {
+  if (typeof window === 'undefined') return () => {};
+  const fn = (e) => handler?.(e);
+  window.addEventListener(CHANGE_EVENT, fn);
+  return () => window.removeEventListener(CHANGE_EVENT, fn);
+}
+
 export default {
   addMockBooking,
   listMockBookingsByUser,
   clearMockBookings,
+  subscribeMockBookingsChanged,
 };
