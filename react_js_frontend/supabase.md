@@ -1,6 +1,6 @@
 # Supabase Integration - Frontend
 
-This app uses Supabase Auth (email/password) and Supabase Database (read-only example table "Car parts").
+This app uses Supabase Auth (email/password) and Supabase Database (read-only examples: "Car parts" and user-specific "user_vehicles").
 
 Follow these steps to configure and verify:
 
@@ -39,72 +39,56 @@ This app constructs `emailRedirectTo` as:
 - `${REACT_APP_FRONTEND_URL}/login` (normalized to avoid trailing slash issues)
 Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabase.
 
-## 4) Common "invalid credentials" causes and fixes
+## 4) Database tables
 
-If you see "Invalid email or password" even with correct credentials, check the following in order:
+- Table: "Car parts" (with a space)
+  - Columns: id, title, Description, Category, Features, image_url, created_at, updated_at
+  - RLS: Configure read access as needed (public read or user-specific policies).
 
-1) Email confirmation
-- If "Confirm email" is enabled in Supabase Auth, you cannot sign in until the email is confirmed.
-- Message to look for: "Email not confirmed." — confirm the email via the link sent during sign up.
+- Table: user_vehicles
+  - Columns (expected by UI): id, user_id, make, model, vin, nickname
+  - RLS: At minimum, enable policies that allow authenticated users to read their own rows:
+    - Example: (using Supabase SQL editor)
+      policy "Users can read their vehicles" on user_vehicles
+      for select
+      using (auth.uid() = user_id);
 
-2) Redirect URL configuration
-- Ensure BOTH of these are added under Authentication > URL Configuration > Redirect URLs:
-  - http://localhost:3000
-  - http://localhost:3000/login
-- Our app passes emailRedirectTo: `${REACT_APP_FRONTEND_URL}/login`. If this URL isn't on the allowlist, auth can fail with vague errors.
-
-3) Environment variables
-- REACT_APP_SUPABASE_URL must be your project URL (https://XYZ.supabase.co)
-- REACT_APP_SUPABASE_KEY must be the anon public key
-- Restart dev server after editing .env so CRA picks up new values.
-
-4) Password policy
-- Check Authentication > Providers > Email -> Password settings. Our UI requires min length 6 by default.
-- If your policy is stronger (e.g., symbols/numbers), use a stronger password.
-
-5) Rate limits
-- Supabase may rate limit repeated attempts. Wait and try later if you see rate-limit messages.
+    - Insert/update/delete policies are not required for current step (read-only), but will be needed later.
 
 ## 5) Frontend behavior
 
 - `src/lib/supabaseClient.js` reads env vars and creates a singleton client.
 - `src/context/AuthContext.js`
+  - Initializes session, exposes `user`, and syncs access token to localStorage.
   - `signUp(email, password, metadata?)` uses `emailRedirectTo` derived from `REACT_APP_FRONTEND_URL` or `window.location.origin`.
-  - Improved error mapping returns user-friendly messages for common errors.
-- `src/pages/Login.js` surfaces friendly errors and requires password min length 6.
+- `src/pages/bookService/VehicleStep.jsx`
+  - Queries Supabase on mount to load `user_vehicles` for the current user:
+    - Uses `supabase.auth.getUser()` (or session from context) to get user id.
+    - Filters `.from("user_vehicles").select("id, make, model, vin, nickname").eq("user_id", userId)`.
+  - Implements loading, empty, and error states.
+  - Selecting a saved vehicle populates the form (make, model, vin, nickname); VIN remains optional.
+  - Manual entry is still supported and drives validation:
+    - Make, model required; VIN optional.
+  - TODOs for future enhancements:
+    - Add/edit/delete vehicle mutations (INSERT/UPDATE/DELETE).
+- `src/pages/parts/PartsList.js` continues to read "Car parts" (read-only).
 
-## 6) Table "Car parts" (optional data)
+## 6) Local verification checklist
 
-- Name: Car parts (with a space)
-- Columns: id, title, Description, Category, Features, image_url, created_at, updated_at
-- RLS: Configure read access as needed.
-
-## 7) Local verification checklist
-
-- Start backend (optional, only for demo REST calls): http://localhost:3001
 - Start frontend: `npm start` at port 3000
-- Go to http://localhost:3000/login
+- Go to http://localhost:3000/login, create/sign in to an account.
+- In Supabase SQL Editor, insert a few rows in `user_vehicles` for your `user_id`:
+  insert into user_vehicles (user_id, make, model, vin, nickname)
+  values ('<YOUR_USER_ID>', 'Hyundai', 'i20', 'MAHXXXXXXXXXXXXXX', 'Hatchback');
 
-Create and verify a test account:
-1. Sign Up:
-   - Email: you@example.com
-   - Password: StrongPassword123!
-   - Display name: Your Name
-   - Expected: If "Confirm email" is enabled, you’ll see a success notice and receive an email.
-2. Confirm email:
-   - Click the email link; it should redirect you to http://localhost:3000/login
-   - Expected: Back on the login page without error.
-3. Sign In:
-   - Use the same email/password.
-   - Expected: Redirects to "/" and header shows your display name.
-4. Refresh:
-   - Reload the page; you should remain signed in (session persistence).
-5. Profile:
-   - Navigate to /profile, change display name, save, and see "Saved".
+- Navigate to /book-service:
+  - Step 1 (Select Vehicle) should show your saved vehicles.
+  - Selecting one should populate the form fields.
+  - Form validation still requires make & model; VIN is optional.
 
-If still seeing "invalid credentials":
-- Check browser console warnings for guidance (we surface redirect URL hints).
-- Re-validate env vars and Supabase dashboard settings above.
-- Regenerate anon key if compromised or mis-copied.
+If you see "Failed to load your vehicles.":
+- Ensure `user_vehicles` table exists with the columns above.
+- Confirm RLS policies allow the authenticated user to select their own rows.
+- Verify env vars (REACT_APP_SUPABASE_URL/KEY) and restart dev server.
 
 Security note: Do not commit real keys. Always use environment variables.
