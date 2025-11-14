@@ -1,6 +1,6 @@
 # Supabase Integration - Frontend
 
-This app uses Supabase Auth (email/password) and Supabase Database (read-only examples: "Car parts" and user-specific "user_vehicles").
+This app uses Supabase Auth (email/password) and Supabase Database (read-only examples: "Car parts", user-specific "user_vehicles", and public "service_types").
 
 Follow these steps to configure and verify:
 
@@ -48,12 +48,21 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
 - Table: user_vehicles
   - Columns (expected by UI): id, user_id, make, model, vin, nickname
   - RLS: At minimum, enable policies that allow authenticated users to read their own rows:
-    - Example: (using Supabase SQL editor)
+    - Example:
       policy "Users can read their vehicles" on user_vehicles
       for select
       using (auth.uid() = user_id);
 
-    - Insert/update/delete policies are not required for current step (read-only), but will be needed later.
+- Table: service_types
+  - Columns (used by UI): id, name, description, base_price, duration_minutes, active
+  - The UI reads only rows where `active = true`.
+  - RLS: If this is public catalog data, you can allow anon read; otherwise restrict as needed.
+  - Example (public read):
+    policy "Public read of active service types" on service_types
+    for select
+    using (active = true);
+
+  - TODO(ADMIN-WRITES): Admin interfaces to create/update/deactivate service types will require insert/update policies. Not implemented in this app.
 
 ## 5) Frontend behavior
 
@@ -61,6 +70,7 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
 - `src/context/AuthContext.js`
   - Initializes session, exposes `user`, and syncs access token to localStorage.
   - `signUp(email, password, metadata?)` uses `emailRedirectTo` derived from `REACT_APP_FRONTEND_URL` or `window.location.origin`.
+
 - `src/pages/bookService/VehicleStep.jsx`
   - Queries Supabase on mount to load `user_vehicles` for the current user:
     - Uses `supabase.auth.getUser()` (or session from context) to get user id.
@@ -71,24 +81,44 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
     - Make, model required; VIN optional.
   - TODOs for future enhancements:
     - Add/edit/delete vehicle mutations (INSERT/UPDATE/DELETE).
-- `src/pages/parts/PartsList.js` continues to read "Car parts" (read-only).
+
+- `src/pages/bookService/ServiceTypeStep.jsx`
+  - Replaces mock data with Supabase query:
+    - `.from("service_types").select("id, name, description, base_price, duration_minutes, active").eq("active", true)`
+  - Implements loading, empty, and error states.
+  - Maps fields to existing booking context usage:
+    - price <- base_price
+    - duration_min <- duration_minutes
+  - Selection flows to booking context and is shown in the Review step.
+
+- `src/components/PartsList.js` continues to read "Car parts" (read-only).
 
 ## 6) Local verification checklist
 
 - Start frontend: `npm start` at port 3000
-- Go to http://localhost:3000/login, create/sign in to an account.
-- In Supabase SQL Editor, insert a few rows in `user_vehicles` for your `user_id`:
+- Go to http://localhost:3000/login, create/sign in to an account (for user_vehicles).
+- Seed tables as needed:
+
+  -- user_vehicles (per-user)
   insert into user_vehicles (user_id, make, model, vin, nickname)
   values ('<YOUR_USER_ID>', 'Hyundai', 'i20', 'MAHXXXXXXXXXXXXXX', 'Hatchback');
 
-- Navigate to /book-service:
-  - Step 1 (Select Vehicle) should show your saved vehicles.
-  - Selecting one should populate the form fields.
-  - Form validation still requires make & model; VIN is optional.
+  -- service_types (public or restricted read)
+  insert into service_types (name, description, base_price, duration_minutes, active)
+  values
+    ('Oil Change', 'Engine oil and filter replacement', 69, 30, true),
+    ('Brake Inspection', 'Brake pads, rotors, and fluid check', 99, 45, true),
+    ('AC Service', 'AC gas refill and leak detection', 129, 60, true);
 
-If you see "Failed to load your vehicles.":
-- Ensure `user_vehicles` table exists with the columns above.
-- Confirm RLS policies allow the authenticated user to select their own rows.
+- Navigate to /book-service:
+  - Step 1 (Select Vehicle) should show your saved vehicles when authenticated.
+  - Step 2 (Select Service Type) should list active service types from Supabase with loading/empty/error states.
+  - Selecting a service type should reflect in the Review step with price and duration.
+
+If you see "Failed to load service types.":
+- Ensure `service_types` table exists with the columns above.
+- Confirm RLS policies allow select for your intended audience (anon or authenticated).
 - Verify env vars (REACT_APP_SUPABASE_URL/KEY) and restart dev server.
 
 Security note: Do not commit real keys. Always use environment variables.
+
