@@ -122,12 +122,18 @@ export function AuthProvider({ children }) {
         siteUrl = window.location.origin;
       }
 
+      // Only include display_name if provided; do not send avatar_url
+      const meta = {};
+      if (typeof metadata?.display_name === "string" && metadata.display_name.trim().length > 0) {
+        meta.display_name = metadata.display_name;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${siteUrl}/login`,
-          data: { display_name: "", avatar_url: "", ...metadata },
+          data: meta,
         },
       });
       if (error) {

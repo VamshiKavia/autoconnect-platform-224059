@@ -19,7 +19,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
+  // Removed avatarUrl state as part of deprecating avatar support in signup
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -40,7 +40,9 @@ export default function Login() {
       if (mode === "signin") {
         await signIn(email, password);
       } else {
-        await signUp(email, password, { display_name: displayName, avatar_url: avatarUrl });
+        // Only pass display_name metadata if present; avatar_url removed
+        const meta = displayName ? { display_name: displayName } : {};
+        await signUp(email, password, meta);
       }
       navigate(from, { replace: true });
     } catch (e2) {
@@ -107,15 +109,6 @@ export default function Login() {
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your display name"
                 required={mode === "signup"}
-              />
-              <div style={{ height: 10 }} />
-              <label className="label" htmlFor="avatar-url">Avatar URL</label>
-              <input
-                id="avatar-url"
-                className="input"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://example.com/avatar.png"
               />
               <div style={{ height: 10 }} />
             </>

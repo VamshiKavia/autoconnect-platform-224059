@@ -4,7 +4,7 @@ import getSupabaseClient from "../lib/supabaseClient";
 
 /**
 // PUBLIC_INTERFACE
- * Profile - display and update Supabase user metadata (display_name, avatar_url).
+ * Profile - display and update Supabase user metadata (display_name only).
  *
  * - Email is read-only
  * - Updates via supabase.auth.updateUser({ data: { ... } })
@@ -14,14 +14,12 @@ export default function Profile() {
   const supabase = getSupabaseClient();
 
   const [displayName, setDisplayName] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
     const meta = user?.user_metadata || {};
     setDisplayName(meta.display_name || "");
-    setAvatarUrl(meta.avatar_url || "");
   }, [user]);
 
   async function onSave(e) {
@@ -32,7 +30,6 @@ export default function Profile() {
       const { error } = await supabase.auth.updateUser({
         data: {
           display_name: displayName,
-          avatar_url: avatarUrl,
         },
       });
       if (error) throw error;
@@ -67,32 +64,6 @@ export default function Profile() {
             />
           </div>
         </div>
-
-        <div style={{ height: 12 }} />
-        <label className="label">Avatar URL</label>
-        <input
-          className="input"
-          value={avatarUrl}
-          onChange={(e) => setAvatarUrl(e.target.value)}
-          placeholder="https://example.com/avatar.png"
-        />
-
-        {avatarUrl ? (
-          <>
-            <div style={{ height: 12 }} />
-            <div className="row" style={{ gap: 16 }}>
-              <img
-                src={avatarUrl}
-                alt="Profile avatar preview"
-                style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", background: "#fff" }}
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-              <div className="subtitle">Preview</div>
-            </div>
-          </>
-        ) : null}
 
         <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
           <div style={{ color: status === "Saved" ? "var(--success)" : "var(--error)" }}>
