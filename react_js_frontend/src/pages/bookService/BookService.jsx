@@ -6,6 +6,8 @@ import CenterStep from "./CenterStep";
 import DateTimeStep from "./DateTimeStep";
 import DetailsStep from "./DetailsStep";
 import ReviewStep from "./ReviewStep";
+import { useAuth } from "../../context/AuthContext";
+import SignInRequiredBanner from "./SignInRequiredBanner.jsx";
 
 /**
 // PUBLIC_INTERFACE
@@ -31,6 +33,7 @@ export default function BookServicePage() {
 }
 
 function StepperArea() {
+  const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [validMap, setValidMap] = useState({ 0: false, 1: false, 2: false, 3: false, 4: false });
   const atFirst = step === 0;
@@ -45,7 +48,16 @@ function StepperArea() {
 
   function next() {
     if (!canNext) return;
-    setStep((s) => Math.min(BOOKING_STEPS.length - 1, s + 1));
+
+    // Prevent navigating to Review (index 5) if not authenticated
+    setStep((s) => {
+      const target = Math.min(BOOKING_STEPS.length - 1, s + 1);
+      if (!user && target === 5) {
+        // Stay on Details step and show banner below
+        return 4;
+      }
+      return target;
+    });
   }
   function back() {
     setStep((s) => Math.max(0, s - 1));
@@ -61,7 +73,14 @@ function StepperArea() {
         {step === 1 && <ServiceTypeStep onValidChange={(v) => updateValidity(1, v)} />}
         {step === 2 && <CenterStep onValidChange={(v) => updateValidity(2, v)} />}
         {step === 3 && <DateTimeStep onValidChange={(v) => updateValidity(3, v)} />}
-        {step === 4 && <DetailsStep onValidChange={(v) => updateValidity(4, v)} />}
+        {step === 4 && (
+          <>
+            <DetailsStep onValidChange={(v) => updateValidity(4, v)} />
+            {!user && (
+              <SignInRequiredBanner id="sign-in-required-inline" focusOnMount={false} />
+            )}
+          </>
+        )}
         {step === 5 && <ReviewStep canSubmit={canSubmit} />}
       </section>
 

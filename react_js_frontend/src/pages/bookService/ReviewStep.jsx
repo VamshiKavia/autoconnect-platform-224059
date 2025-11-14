@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { BOOKING_STEPS, useBooking } from "./context";
 import { useAuth } from "../../context/AuthContext";
 import getSupabaseClient from "../../lib/supabaseClient";
+import SignInRequiredBanner from "./SignInRequiredBanner.jsx";
 
 /**
 // PUBLIC_INTERFACE
@@ -23,8 +24,25 @@ export default function ReviewStep({ canSubmit }) {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState(null); // store inserted row
+  const noticeRef = useRef(null);
+
+  useEffect(() => {
+    // If user signs in while on this step, ensure any previous error about auth is cleared
+    if (user && err && err.toLowerCase().includes("sign in")) {
+      setErr("");
+    }
+  }, [user, err]);
 
   async function onConfirm() {
+    // Block when unauthenticated: focus the sign-in banner for guidance
+    if (!user) {
+      setErr("Please sign in to confirm your booking.");
+      // Focus the notice if present
+      const el = document.getElementById("sign-in-required");
+      if (el && typeof el.focus === "function") el.focus();
+      return;
+    }
+
     if (!canSubmit || submitting) return;
     setErr("");
     setSubmitting(true);
@@ -64,10 +82,18 @@ export default function ReviewStep({ canSubmit }) {
     }
   }
 
+  const confirmDisabled = !user || !canSubmit || submitting;
+
   return (
     <div className="card" aria-labelledby="review-step-title">
       <h3 id="review-step-title" className="section-title">Review & Confirm</h3>
       <p className="subtitle">Verify your details before submitting.</p>
+
+      {!user && (
+        <div ref={noticeRef}>
+          <SignInRequiredBanner id="sign-in-required" focusOnMount />
+        </div>
+      )}
 
       {err && <div className="card" style={{ color: "var(--error)" }}>{err}</div>}
       {success && (
@@ -131,8 +157,8 @@ export default function ReviewStep({ canSubmit }) {
         <button
           className="btn"
           onClick={onConfirm}
-          disabled={!canSubmit || submitting}
-          aria-disabled={!canSubmit || submitting}
+          disabled={confirmDisabled}
+          aria-disabled={confirmDisabled}
         >
           {submitting ? "Submitting..." : success ? "Booked" : "Confirm Booking"}
         </button>

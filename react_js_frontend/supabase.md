@@ -72,6 +72,10 @@ If you see "Invalid email or password" even with correct credentials, check the 
   - `signUp(email, password, metadata?)` uses `emailRedirectTo` derived from `REACT_APP_FRONTEND_URL` or `window.location.origin`.
   - Improved error mapping returns user-friendly messages for common errors.
 - `src/pages/Login.js` surfaces friendly errors and requires password min length 6.
+- Booking flow requires authentication to confirm:
+  - `src/pages/bookService/BookService.jsx` prevents navigation to "Review & Confirm" when logged out and shows an inline sign-in banner.
+  - `src/pages/bookService/ReviewStep.jsx` disables the Confirm button and shows a focused sign-in banner if unauthenticated.
+  - Upon successful sign-in, the Confirm action is re-enabled without losing previously entered booking state held in context.
 
 ## 6) Table "Car parts" (optional data)
 
