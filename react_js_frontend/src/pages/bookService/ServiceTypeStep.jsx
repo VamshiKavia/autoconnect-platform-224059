@@ -7,9 +7,11 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * ServiceTypeStep - Step 2: Choose a service type from Supabase "service_types" (read-only).
  *
  * Reads fields: id, name, description, base_price, duration_minutes, active
- * Now fetches and displays all services without search or active-only filters/pagination.
+ * Displays all services, merging Supabase results with a client-side fallback list
+ * so the UI immediately shows all items from design even if DB seeding is incomplete.
  * Maintains selection/validation and provides loading/empty/error states.
  *
+ * TODO(services): Remove fallback once Supabase service_types is fully seeded.
  * TODO: Extract CardList component.
  */
 export default function ServiceTypeStep({ onValidChange }) {
@@ -28,7 +30,72 @@ export default function ServiceTypeStep({ onValidChange }) {
 
   const supabase = getSupabaseClient();
 
-  // Fetch all services from server (no filters)
+  // --- Client-side fallback list (from attached image) ---
+  // Note: numeric values represent "from" price and baseline duration when a range is shown.
+  // TODO(services): Remove this when DB has all items.
+  const fallbackServices = useMemo(
+    () => [
+      {
+        id: "fallback-oil-change",
+        name: "Oil Change",
+        description: "Keep your engine healthy with fresh oil and filter.",
+        base_price: 59,
+        duration_minutes: 30,
+        active: true,
+      },
+      {
+        id: "fallback-brake-inspection",
+        name: "Brake Inspection",
+        description: "Comprehensive brake system inspection for safety.",
+        base_price: 79,
+        duration_minutes: 45,
+        active: true,
+      },
+      {
+        id: "fallback-all-services",
+        name: "All Services",
+        description: "Full multi-point checkup. Ideal for periodic maintenance.",
+        base_price: 129,
+        duration_minutes: 90,
+        active: true,
+      },
+      {
+        id: "fallback-diagnostics",
+        name: "Diagnostics",
+        description: "Computerized scan and troubleshooting of warning lights.",
+        base_price: 89,
+        duration_minutes: 60,
+        active: true,
+      },
+      {
+        id: "fallback-ac-service",
+        name: "AC Service",
+        description: "AC performance check and top-up to stay cool.",
+        base_price: 99,
+        duration_minutes: 60,
+        active: true,
+      },
+      {
+        id: "fallback-car-washing",
+        name: "Car Washing",
+        description: "From $40–$60. Exterior wash and quick interior clean.",
+        base_price: 40,
+        duration_minutes: 45,
+        active: true,
+      },
+      {
+        id: "fallback-car-painting",
+        name: "Car Painting",
+        description: "From $300+. Panel and full-body paint options available.",
+        base_price: 300,
+        duration_minutes: 240,
+        active: true,
+      },
+    ],
+    []
+  );
+
+  // Fetch all services from Supabase (no filters to ensure full list)
   const fetchAllServerSide = useCallback(async () => {
     const { data, error } = await supabase
       .from("service_types")
@@ -38,7 +105,7 @@ export default function ServiceTypeStep({ onValidChange }) {
     return { data: Array.isArray(data) ? data : [] };
   }, [supabase]);
 
-  // Client-side fallback fetch (no filters)
+  // Client-side cache backed fetch
   const fetchAllClientSide = useCallback(async () => {
     if (!allRowsCacheRef.current) {
       const { data, error } = await supabase
@@ -51,6 +118,18 @@ export default function ServiceTypeStep({ onValidChange }) {
     return { data: allRowsCacheRef.current };
   }, [supabase]);
 
+  // Merge DB results with fallback, avoiding duplicates by name (case-insensitive)
+  function mergeWithFallback(dbRows) {
+    const norm = (s) => (s || "").toString().trim().toLowerCase();
+    const seenByName = new Set(dbRows.map((r) => norm(r.name)));
+    const extras = fallbackServices.filter((f) => !seenByName.has(norm(f.name)));
+    // Ensure prominent items appear first in a sensible order
+    const combined = [...dbRows, ...extras];
+    // Stable sort by name for predictability; design shows grouped cards but alphabetical is fine
+    combined.sort((a, b) => norm(a.name).localeCompare(norm(b.name)));
+    return combined;
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -60,16 +139,17 @@ export default function ServiceTypeStep({ onValidChange }) {
       try {
         const { data } = await fetchAllServerSide();
         if (cancelled) return;
-        setRows(data);
+        setRows(mergeWithFallback(data));
       } catch (e) {
         try {
           const { data } = await fetchAllClientSide();
           if (cancelled) return;
-          setRows(data);
+          setRows(mergeWithFallback(data));
         } catch (e2) {
           if (!cancelled) {
             setErr(e2?.message || e?.message || "Failed to load service types.");
-            setRows([]);
+            // Even if both DB attempts failed, we still show fallback so the step isn't empty.
+            setRows(mergeWithFallback([]));
           }
         }
       } finally {
@@ -81,6 +161,7 @@ export default function ServiceTypeStep({ onValidChange }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchAllServerSide, fetchAllClientSide]);
 
   // Map selection to context
@@ -113,7 +194,9 @@ export default function ServiceTypeStep({ onValidChange }) {
       <h3 id="servicetype-step-title" className="section-title">
         Select Service Type
       </h3>
-      <p className="subtitle">Select a service to continue.</p>
+      <p className="subtitle">
+        Select a service to continue. Pricing and durations shown are estimates.
+      </p>
 
       {loading && (
         <div className="card" style={{ background: "var(--background)" }}>
@@ -160,9 +243,13 @@ export default function ServiceTypeStep({ onValidChange }) {
               >
                 <div className="row" style={{ justifyContent: "space-between" }}>
                   <strong>{svc.name || "Untitled service"}</strong>
-                  <span className="subtitle">${Number(price).toLocaleString()}</span>
+                  <span className="subtitle">
+                    ${Number(price).toLocaleString()}
+                  </span>
                 </div>
-                <div style={{ color: "var(--muted)", marginTop: 6 }}>Approx. {duration} min</div>
+                <div style={{ color: "var(--muted)", marginTop: 6 }}>
+                  Approx. {duration} min
+                </div>
                 {svc.description ? (
                   <div className="subtitle" style={{ marginTop: 4 }}>
                     {svc.description}

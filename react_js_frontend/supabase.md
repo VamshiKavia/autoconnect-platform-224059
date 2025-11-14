@@ -40,8 +40,9 @@ In Supabase dashboard:
 
 - Table: service_types
   - Columns: id, name, description, base_price, duration_minutes, active
-  - UI reads rows with `active = true`.
-  - Example (public read of active only):
+  - UI reads rows and now merges with a temporary client-side fallback list to ensure all key services are visible even if DB isn’t fully seeded.
+    - TODO: Remove fallback once `service_types` contains the complete catalog (Oil Change, Brake Inspection, All Services, Diagnostics, AC Service, Car Washing, Car Painting).
+  - Suggested RLS (public read of active only):
     policy "Public read of active service types" on service_types
     for select
     using (active = true);
