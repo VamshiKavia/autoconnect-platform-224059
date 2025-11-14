@@ -1,239 +1,195 @@
-/* Ocean Professional - Minimalist */
-
 :root {
   --primary: #374151;
   --secondary: #9CA3AF;
   --success: #10B981;
   --error: #EF4444;
-  --bg: #FFFFFF;
+  --background: #FFFFFF;
   --surface: #F9FAFB;
   --text: #111827;
   --muted: #6B7280;
+  --border: #E5E7EB;
 
   --radius: 10px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+
   --shadow: 0 2px 10px rgba(0,0,0,0.06);
+
   --space: 16px;
+  --ring: rgba(55, 65, 81, 0.35);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
+/* Base */
 html, body, #root {
   height: 100%;
-  background: var(--bg);
+  background: var(--background);
   color: var(--text);
 }
-
-.app-shell {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.navbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--bg);
-  border-bottom: 1px solid #E5E7EB;
-}
-
-.nav-container {
-  max-width: 1120px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space);
-  padding: 12px var(--space);
-}
-
-.brand {
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  color: var(--primary);
-}
-
-.nav-links {
-  display: flex;
-  gap: 12px;
-  margin-left: auto;
-}
-
-.nav-link {
-  color: var(--muted);
-  text-decoration: none;
-  padding: 8px 10px;
-  border-radius: 8px;
-}
-
-.nav-link.active,
-.nav-link:hover {
-  color: var(--primary);
-  background: var(--surface);
-}
-
-.btn {
-  appearance: none;
-  border: 1px solid var(--primary);
-  background: var(--primary);
-  color: #fff;
-  padding: 8px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.btn.secondary {
-  background: transparent;
-  color: var(--primary);
-}
-.btn.secondary:hover {
-  background: var(--surface);
-}
-
-.main {
-  flex: 1;
-}
-
+/* Containers */
 .container {
   max-width: 1120px;
   margin: 0 auto;
   padding: 24px var(--space);
 }
 
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  transition: box-shadow 200ms ease, transform 200ms ease, background-color 200ms ease, border-color 200ms ease;
+}
+.card--section {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+.card:focus-within {
+  outline: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+}
+
+/* Typography */
+.section-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+.subtitle, .muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Layout helpers */
+.row { display: flex; gap: 12px; align-items: center; }
+.stack { display: grid; gap: 16px; }
+.stack-sm { display: grid; gap: 8px; }
+
+/* Grid */
 .grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 16px;
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid #E5E7EB;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 16px;
-  transition: box-shadow 200ms ease, transform 200ms ease, background-color 200ms ease, border-color 200ms ease;
+/* Buttons */
+.btn {
+  appearance: none;
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 120ms ease, box-shadow 120ms ease, background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(55,65,81,0.18); }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--ring); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.6; cursor: not-allowed; }
+.btn.secondary {
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.btn.secondary:hover { background: var(--surface); }
 
-/* Subtle card elevation on hover/focus within */
-.card:focus-within {
+/* Inputs */
+.label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: block;
+}
+.input, .select, .textarea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 10px 12px;
+  width: 100%;
+  background: #fff;
+  color: var(--text);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.input:hover, .select:hover, .textarea:hover { border-color: #D1D5DB; }
+.input:focus, .select:focus, .textarea:focus {
   outline: none;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--ring);
 }
 
-/* Simple hover zoom for images inside card */
-.hover-zoom {
+/* Stepper dots used in BookService Stepper */
+.step__dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Banners */
+.banner {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.banner--info {
+  background: #EFF6FF;
+  border: 1px solid #DBEAFE;
+  color: #1D4ED8;
+}
+.banner--warn {
+  background: #FEFCE8;
+  border: 1px solid #FEF3C7;
+  color: #92400E;
+}
+
+/* Skeleton */
+.skeleton {
   display: block;
   border-radius: 8px;
-  will-change: transform;
-  transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 37%, #F3F4F6 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
-.card:hover .hover-zoom,
-.hover-zoom:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
-}
-
-/* Fade-in and slide-up animation utility */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.fade-in-up {
-  opacity: 0; /* start hidden until animated */
-}
-
-/* Defensive class: if observer fails, we can force-visibility via class toggle */
-.force-visible,
-.force-visible.fade-in-up {
-  opacity: 1 !important;
-  transform: none !important;
-  animation: none !important;
-}
-
-/* Defensive: if an element contains an image, ensure the image itself is visible.
-   Cards already have background and dimensions; this avoids perceived missing images if JS fails. */
-.fade-in-up img {
-  display: block;
-}
-
-.fade-in-up.is-visible {
-  animation: fadeInUp 500ms ease forwards;
-}
-
-/* Respect reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .hover-zoom,
-  .card {
-    transition: none !important;
-  }
-  .fade-in-up,
-  .fade-in-up.is-visible {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
-}
-
-/* Responsive grid helpers for launch cards */
-.launch-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 16px;
-}
-
-.launch-card {
-  grid-column: span 4;
-}
-
-@media (max-width: 1024px) {
-  .launch-card {
-    grid-column: span 6;
-  }
-}
-@media (max-width: 640px) {
-  .launch-card {
-    grid-column: span 12;
-  }
-}
-
-/* Accessible button focus style refinement */
+/* Focus refinement */
 .btn:focus-visible,
-.nav-link:focus-visible,
+a:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #60A5FA; /* sky-400 */
+  outline: 2px solid #60A5FA;
   outline-offset: 2px;
   border-color: #93C5FD;
 }
 
-/* Parts page minimal utilities */
-.parts-img {
-  /* Helps ensure placeholders look consistent across cards */
-  background: linear-gradient(135deg, #eef2ff, #f9fafb);
-}
-
-/* On very small screens allow cards to span full width (reuses launch-card rules) */
-/* No extra media queries needed since .launch-card handles 12→6→4 spans responsively */
-
-.section-title {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-}
-
-.subtitle {
-  color: var(--muted);
-  font-size: 14px;
-  margin-bottom: 16px;
-}
-
-/* Screen reader only helper */
+/* Screen reader only */
 .sr-only {
   position: absolute !important;
   width: 1px !important;
@@ -244,62 +200,4 @@ textarea:focus-visible {
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
   border: 0 !important;
-}
-
-.input {
-  border: 1px solid #E5E7EB;
-  border-radius: 8px;
-  padding: 10px 12px;
-  width: 100%;
-  background: #fff;
-  color: var(--text);
-}
-
-.label {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 6px;
-  display: block;
-}
-
-.row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-/* Centering utility for column layouts in hero/sections */
-.center-col {
-  display: flex;
-  flex-direction: column;
-  justify-content: center; /* vertical centering within the column */
-  align-items: flex-start; /* keep text left-aligned for readability */
-  height: 100%;
-}
-
-/* Hero section column min-height to make vertical centering visible on larger screens */
-.vcenter-col {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start; /* keep text left-aligned */
-  min-height: 360px; /* matches typical hero height without being too tall */
-}
-
-/* On small screens where columns stack, reduce min-height to avoid awkward spacing */
-@media (max-width: 768px) {
-  .center-col {
-    justify-content: center;
-    align-items: flex-start; /* maintain left alignment for accessibility */
-  }
-  .vcenter-col {
-    min-height: 220px;
-  }
-}
-
-.footer {
-  border-top: 1px solid #E5E7EB;
-  padding: 16px var(--space);
-  color: var(--muted);
-  font-size: 14px;
 }

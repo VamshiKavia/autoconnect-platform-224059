@@ -6,13 +6,8 @@ import { useNavigate } from "react-router-dom";
  * SignInRequiredBanner - Ocean Professional styled banner prompting users to sign in.
  *
  * Props:
- * - focusOnMount?: boolean - when true, focuses the banner for accessibility
+ * - focusOnMount?: boolean - optional auto-focus for accessibility
  * - id?: string - optional id for focusing from other components
- *
- * Behavior:
- * - Provides clear messaging that sign-in is required to continue.
- * - Offers CTA buttons to Sign In and Create Account.
- * - Navigates to /login and /signup (if /signup doesn't exist, /login will handle signup tab).
  */
 export default function SignInRequiredBanner({ focusOnMount = false, id = "sign-in-required" }) {
   const navigate = useNavigate();
@@ -44,7 +39,7 @@ export default function SignInRequiredBanner({ focusOnMount = false, id = "sign-
             Sign in required
           </div>
           <div className="subtitle" style={{ marginBottom: 0 }}>
-            You must be signed in to review and confirm your booking.
+            You must be signed in to continue your booking.
           </div>
         </div>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>

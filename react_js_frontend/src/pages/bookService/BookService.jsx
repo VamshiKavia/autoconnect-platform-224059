@@ -17,22 +17,18 @@ import ReviewStep from "./ReviewStep";
  * 5) Enter Details & Preferences
  * 6) Review & Confirm
  *
- * - Uses a lightweight context to persist selections across steps.
- * - Mock/static data for service types, centers, and slot availability.
- * - Each step validates minimally; Next disabled until valid.
- * - Progress indicator/stepper and Back/Next controls.
- * - Submit disabled until all steps valid; no backend call yet.
+ * - Uses the BookingProvider from context to persist selections across steps.
+ * - UI/UX is updated to Ocean Professional: stepper, cards, buttons, accessibility.
+ * - No data fetching logic here; steps handle data as needed.
  *
- * TODO(API):
- * - Wire up FastAPI endpoints for service types, centers, slots, and booking creation.
- * - Replace placeholders with apiGet/apiPost hooks and loading/error states.
+ * TODO: Extract Stepper component to shared components for reuse.
  */
 export default function BookServicePage() {
   return (
     <BookingProvider>
-      <div className="container">
+      <main className="container" aria-labelledby="book-service-title">
         <header className="card" style={{ marginBottom: 12 }}>
-          <h1 className="section-title" style={{ fontSize: 22, marginBottom: 6 }}>
+          <h1 id="book-service-title" className="section-title" style={{ fontSize: 22, marginBottom: 6 }}>
             Book My Service
           </h1>
           <p className="subtitle" style={{ marginBottom: 0 }}>
@@ -41,7 +37,7 @@ export default function BookServicePage() {
         </header>
 
         <StepperArea />
-      </div>
+      </main>
     </BookingProvider>
   );
 }
@@ -80,10 +76,6 @@ function StepperArea() {
         {step === 5 && (
           <ReviewStep
             canSubmit={canSubmit}
-            onConfirm={() => {
-              // Placeholder confirmation; in future, post to backend and route to a success screen
-              alert("Booking submitted (mock). Backend integration coming soon.");
-            }}
           />
         )}
       </section>
@@ -121,30 +113,19 @@ function Stepper({ current }) {
               style={{
                 flex: "1 1 160px",
                 minWidth: 150,
-                background: "var(--bg)",
-                border: "1px solid #E5E7EB",
+                background: "var(--background)",
+                border: "1px solid var(--border)",
                 boxShadow: "none",
                 padding: 10,
               }}
               aria-current={isActive ? "step" : undefined}
             >
               <div className="row" style={{ justifyContent: "flex-start" }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 999,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: isDone ? "var(--success)" : isActive ? "var(--primary)" : "var(--surface)",
-                    color: isDone || isActive ? "#fff" : "var(--muted)",
-                    border: "1px solid #E5E7EB",
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
+                <span className="step__dot" aria-hidden="true"
+                style={{
+                  background: isDone ? "var(--success)" : isActive ? "var(--primary)" : "var(--surface)",
+                  color: isDone || isActive ? "#fff" : "var(--muted)"
+                }}>
                   {isDone ? "✓" : idx + 1}
                 </span>
                 <span

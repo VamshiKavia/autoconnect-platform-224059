@@ -4,41 +4,20 @@ import getSupabaseClient from "../../lib/supabaseClient";
 
 /**
 // PUBLIC_INTERFACE
- * DateTimeStep - Step 4: Pick Date and Time slot.
- *
- * Integrates with Supabase table "service_center_slots" to list available slots for the
- * selected service center (and optionally service type), filtered by selected date.
- *
- * Behavior:
- * - Reads context selections for center and service type.
- * - User chooses a date (>= today). We query active slots with status='available'
- *   where start_at falls on the selected day (UTC timestamp range computed from local date).
- * - Loading, error, and empty states are displayed using Ocean Professional styling.
- * - Local times are displayed using Intl.DateTimeFormat (user's locale/timezone).
- *   TODO(TZ): Make timezone explicit and consistent end-to-end.
- * - Past times are disabled.
- * - Persist chosen slot to context as:
- *     dateTime: {
- *       date: YYYY-MM-DD (string),
- *       slot: formatted human-readable time range (e.g. "10:00 AM - 10:30 AM"),
- *       slotMeta: { id, start_at, end_at } // raw ISO strings from Supabase
- *     }
- * - Validation: cannot proceed until a slot is selected and date is today or later.
+ * DateTimeStep - Step 4: Pick Date and Time slot with Ocean styling.
+ * Uses Supabase service_center_slots reading logic. No route/logic changes.
  */
 export default function DateTimeStep({ onValidChange }) {
   const { dateTime, setDateTime, center, serviceType } = useBooking();
 
-  // Selected calendar date (YYYY-MM-DD) and selected slot id
   const [date, setDate] = useState(dateTime?.date || "");
   const [selectedSlotId, setSelectedSlotId] = useState(dateTime?.slotMeta?.id || "");
   const [touched, setTouched] = useState(false);
 
-  // Query state
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const [rows, setRows] = useState([]); // normalized { id, start_at, end_at, capacity, booked_count }
+  const [rows, setRows] = useState([]);
 
-  // Formatter for display in user's local time zone
   const timeFmt = useMemo(
     () =>
       new Intl.DateTimeFormat(undefined, {
@@ -48,7 +27,6 @@ export default function DateTimeStep({ onValidChange }) {
     []
   );
 
-  // Compute day start/end based on selected date in local timezone
   const dayBounds = useMemo(() => {
     if (!date) return null;
     const [y, m, d] = date.split("-").map((s) => Number(s));
@@ -58,12 +36,10 @@ export default function DateTimeStep({ onValidChange }) {
     return { start, end };
   }, [date]);
 
-  // Load slots from Supabase whenever date/center/serviceType change
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      // Reset state
       setErr("");
       setRows([]);
       setLoading(true);
@@ -76,20 +52,9 @@ export default function DateTimeStep({ onValidChange }) {
 
         const supabase = getSupabaseClient();
 
-        // We filter by:
-        // - active = true
-        // - status = 'available'
-        // - service_center_id = selected center
-        // - service_type_id = selected service type (only if exists and is non-null)
-        // - start_at within selected day (inclusive)
         const { start, end } = dayBounds || {};
-        if (!start || !end) {
-          setLoading(false);
-          return;
-        }
+        if (!start || !end) { setLoading(false); return; }
 
-        // Create ISO strings; Supabase timestamptz compares lexicographically in UTC
-        // TODO(TZ): Explicit timezone handling. Current approach assumes DB stores in UTC.
         const startIso = start.toISOString();
         const endIso = end.toISOString();
 
@@ -103,7 +68,6 @@ export default function DateTimeStep({ onValidChange }) {
           .lte("start_at", endIso)
           .order("start_at", { ascending: true });
 
-        // Filter by service_type_id only when we have a specific id
         if (serviceType?.id) {
           query = query.eq("service_type_id", serviceType.id);
         }
@@ -112,22 +76,19 @@ export default function DateTimeStep({ onValidChange }) {
         if (error) throw error;
 
         const list = Array.isArray(data) ? data : [];
-        // Normalize and filter out slots that are already in the past for today
         const now = new Date();
 
         const normalized = list
           .map((r) => ({
             id: r.id,
-            start_at: r.start_at, // ISO
-            end_at: r.end_at, // ISO
+            start_at: r.start_at,
+            end_at: r.end_at,
             capacity: Number(r.capacity ?? 0),
             booked_count: Number(r.booked_count ?? 0),
             status: r.status,
           }))
           .filter((r) => {
-            // Disable selection of past times: exclude start_at < now (local compare vs parsed Date)
             const startDt = new Date(r.start_at);
-            // If date is today, filter out past start times. For future days, allow all.
             if (isSameDate(now, dayBounds?.start)) {
               return startDt.getTime() >= now.getTime();
             }
@@ -136,7 +97,6 @@ export default function DateTimeStep({ onValidChange }) {
 
         if (!cancelled) {
           setRows(normalized);
-          // If currently selected slot ID is not present, clear selection
           if (selectedSlotId && !normalized.find((x) => String(x.id) === String(selectedSlotId))) {
             setSelectedSlotId("");
           }
@@ -151,30 +111,18 @@ export default function DateTimeStep({ onValidChange }) {
     }
 
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, center?.id, serviceType?.id]);
 
-  // Persist to context and drive validity
   useEffect(() => {
     const selected = rows.find((r) => String(r.id) === String(selectedSlotId)) || null;
-
-    // Prepare human-readable slot label
     const slotLabel = selected ? formatRange(selected.start_at, selected.end_at, timeFmt) : "";
 
-    // Persist extended meta to context
     setDateTime({
       date: date || "",
-      slot: slotLabel, // human-readable for Review step
-      slotMeta: selected
-        ? {
-          id: selected.id,
-          start_at: selected.start_at,
-          end_at: selected.end_at,
-        }
-        : null,
+      slot: slotLabel,
+      slotMeta: selected ? { id: selected.id, start_at: selected.start_at, end_at: selected.end_at } : null,
     });
 
     onValidChange?.(isValid(date, selected));
@@ -188,7 +136,6 @@ export default function DateTimeStep({ onValidChange }) {
     const nowStr = todayStr();
     return d >= nowStr;
   }
-
   function todayStr() {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -196,7 +143,6 @@ export default function DateTimeStep({ onValidChange }) {
     const dd = String(now.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   }
-
   function formatRange(startIso, endIso, fmt) {
     try {
       const s = new Date(startIso);
@@ -206,22 +152,15 @@ export default function DateTimeStep({ onValidChange }) {
       return "";
     }
   }
-
   function isSameDate(a, b) {
     if (!a || !b) return false;
-    return (
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
-    );
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
 
   return (
-    <div className="card" aria-labelledby="datetime-step-title">
+    <section className="card" aria-labelledby="datetime-step-title">
       <h3 id="datetime-step-title" className="section-title">Pick Date & Time</h3>
-      <p className="subtitle">
-        Choose a suitable day and an available time slot.
-      </p>
+      <p className="subtitle">Choose a suitable day and an available time slot.</p>
 
       <div className="row" style={{ flexWrap: "wrap" }}>
         <div style={{ width: 220, minWidth: 200 }}>
@@ -232,10 +171,7 @@ export default function DateTimeStep({ onValidChange }) {
             type="date"
             value={date}
             min={todayStr()}
-            onChange={(e) => {
-              setDate(e.target.value);
-              setSelectedSlotId("");
-            }}
+            onChange={(e) => { setDate(e.target.value); setSelectedSlotId(""); }}
             onBlur={() => setTouched(true)}
             required
           />
@@ -247,9 +183,8 @@ export default function DateTimeStep({ onValidChange }) {
         </div>
       </div>
 
-      {/* Loading, error, empty states */}
       {date && loading && (
-        <div className="card" style={{ background: "var(--bg)", marginTop: 12 }}>
+        <div className="card" style={{ background: "var(--background)", marginTop: 12 }}>
           Loading available slots...
         </div>
       )}
@@ -257,12 +192,13 @@ export default function DateTimeStep({ onValidChange }) {
         <div
           className="card"
           style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)", marginTop: 12 }}
+          role="alert"
         >
           {err}
         </div>
       )}
       {date && empty && (
-        <div className="card" style={{ background: "var(--bg)", color: "var(--muted)", marginTop: 12 }}>
+        <div className="card" style={{ background: "var(--background)", color: "var(--muted)", marginTop: 12 }}>
           No slots available for this date. Try another date.
         </div>
       )}
@@ -275,8 +211,6 @@ export default function DateTimeStep({ onValidChange }) {
               const s = new Date(r.start_at);
               const e = new Date(r.end_at);
               const label = `${timeFmt.format(s)} - ${timeFmt.format(e)}`;
-
-              // Disable if in the past relative to now (extra safety)
               const isPast = s.getTime() < Date.now();
               const active = String(selectedSlotId) === String(r.id);
 
@@ -304,12 +238,6 @@ export default function DateTimeStep({ onValidChange }) {
           </div>
         </div>
       )}
-
-      {/* TODO(TZ): Explicit timezone handling.
-          - Consider storing/displaying times with timezone awareness per center.
-          - Possibly surface the timezone and convert consistently in both client and backend.
-          TODO(CONFLICTS): Before booking creation, check capacity conflicts and double-booking.
-      */}
-    </div>
+    </section>
   );
 }

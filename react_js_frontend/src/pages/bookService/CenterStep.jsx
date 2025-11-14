@@ -5,29 +5,20 @@ import getSupabaseClient from "../../lib/supabaseClient";
 /**
 // PUBLIC_INTERFACE
  * CenterStep - Step 3: Choose a service center from Supabase "service_centers" (read-only).
+ * Keeps existing behavior; UI/UX polished with Ocean style.
  *
- * Behavior:
- * - Loads active centers from Supabase: id, name, address_line1, address_line2, city, state,
- *   postal_code, country, latitude, longitude, phone, email, opening_hours (json), active
- * - Filters to active = true
- * - Implements loading, empty, and error states
- * - Keeps existing validation: a center must be selected to continue
- * - Selection persists in booking context and is shown in Review step
- * - Optional: shows a simple distance if browser geolocation is available (placeholder calc)
+ * TODO: Extract CardList component for reuse.
  */
 export default function CenterStep({ onValidChange }) {
   const { center, setCenter } = useBooking();
 
-  // UI state
   const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState(center?.id || "");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // Optional geolocation
   const [geo, setGeo] = useState({ lat: null, lng: null, ready: false, denied: false });
 
-  // Load centers from Supabase (active = true)
   useEffect(() => {
     let cancelled = false;
 
@@ -48,13 +39,9 @@ export default function CenterStep({ onValidChange }) {
         if (cancelled) return;
 
         const list = Array.isArray(data) ? data : [];
-
-        // Normalize rows to a shape used by Review step and context
         const normalized = list.map(mapCenterRecord);
 
         setRows(normalized);
-
-        // If we had a selected id that isn't present anymore, clear it
         if (selected && !normalized.find((x) => String(x.id) === String(selected))) {
           setSelected("");
         }
@@ -69,13 +56,11 @@ export default function CenterStep({ onValidChange }) {
     }
 
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Acquire geolocation (best effort, optional)
+  // Geolocation optional
   useEffect(() => {
     if (!("geolocation" in navigator)) {
       setGeo((g) => ({ ...g, ready: true }));
@@ -93,7 +78,6 @@ export default function CenterStep({ onValidChange }) {
     );
   }, []);
 
-  // When selection changes, update booking context and validity
   useEffect(() => {
     const found = rows.find((c) => String(c.id) === String(selected)) || null;
     setCenter(found);
@@ -104,11 +88,11 @@ export default function CenterStep({ onValidChange }) {
   const empty = useMemo(() => !loading && !err && rows.length === 0, [loading, err, rows]);
 
   return (
-    <div className="card" aria-labelledby="center-step-title">
+    <section className="card" aria-labelledby="center-step-title">
       <h3 id="center-step-title" className="section-title">Choose Service Center</h3>
       <p className="subtitle">Select your preferred Ocean Motors service location.</p>
 
-      {loading && <div className="card" style={{ background: "var(--bg)" }}>Loading service centers...</div>}
+      {loading && <div className="card" style={{ background: "var(--background)" }}>Loading service centers...</div>}
 
       {err && (
         <div className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
@@ -117,7 +101,7 @@ export default function CenterStep({ onValidChange }) {
       )}
 
       {empty && (
-        <div className="card" style={{ background: "var(--bg)", color: "var(--muted)" }}>
+        <div className="card" style={{ background: "var(--background)", color: "var(--muted)" }}>
           No active service centers available.
         </div>
       )}
@@ -135,7 +119,7 @@ export default function CenterStep({ onValidChange }) {
                 className="card"
                 style={{
                   gridColumn: "span 6",
-                  borderColor: active ? "#93C5FD" : "#E5E7EB",
+                  borderColor: active ? "#93C5FD" : "var(--border)",
                   background: active ? "#F3F4F6" : "var(--surface)",
                 }}
               >
@@ -171,20 +155,16 @@ export default function CenterStep({ onValidChange }) {
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
-/**
- * Map raw Supabase record to a normalized center object used by booking context.
- */
+/** Mapper */
 function mapCenterRecord(row) {
-  // Maintain a compact "address" string for Review step compatibility
   const address = formatAddress(row);
   return {
     id: row.id,
     name: row.name || "",
-    // Retain a simple address string for the Review step while keeping structured fields too
     address,
     address_line1: row.address_line1 || "",
     address_line2: row.address_line2 || "",
@@ -200,10 +180,6 @@ function mapCenterRecord(row) {
     active: !!row.active,
   };
 }
-
-/**
- * Build a readable address string from structured fields.
- */
 function formatAddress(c) {
   const parts = [
     c.address_line1,
@@ -214,30 +190,15 @@ function formatAddress(c) {
     .flat()
     .map((s) => (s || "").toString().trim())
     .filter(Boolean);
-
   const line = parts.join(", ").replace(/\s+,/g, ",").replace(/,\s*,/g, ", ");
   return line || "";
 }
-
-/**
- * Compute approximate distance in km between two lat/lng points.
- * Returns null if any coordinate is missing.
- */
 function computeDistanceKm(lat1, lon1, lat2, lon2) {
   if (
-    lat1 == null ||
-    lon1 == null ||
-    lat2 == null ||
-    lon2 == null ||
-    !isFinite(Number(lat1)) ||
-    !isFinite(Number(lon1)) ||
-    !isFinite(Number(lat2)) ||
-    !isFinite(Number(lon2))
-  ) {
-    return null;
-  }
-  // Haversine formula
-  const R = 6371; // km
+    lat1 == null || lon1 == null || lat2 == null || lon2 == null ||
+    !isFinite(Number(lat1)) || !isFinite(Number(lon1)) || !isFinite(Number(lat2)) || !isFinite(Number(lon2))
+  ) return null;
+  const R = 6371;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
@@ -246,10 +207,5 @@ function computeDistanceKm(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
-function toRad(v) {
-  return (v * Math.PI) / 180;
-}
-function safeNumber(v, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
+function toRad(v) { return (v * Math.PI) / 180; }
+function safeNumber(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }

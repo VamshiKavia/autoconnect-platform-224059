@@ -5,29 +5,16 @@ import { useAuth } from "../../context/AuthContext";
 
 /**
 // PUBLIC_INTERFACE
- * VehicleStep - Step 1: Select/enter vehicle details.
+ * VehicleStep - Step 1: Select/enter vehicle details with Ocean Professional UI.
+ * Uses Supabase user_vehicles read-only list. No data logic changed.
  *
- * Validates: make, model. VIN optional.
- * Data: Reads user's vehicles from Supabase table "user_vehicles" using user_id.
- * Fields mapped: id, make, model, vin, nickname. VIN remains optional.
- *
- * Behavior:
- * - Shows a selectable list of saved vehicles (if any) from Supabase.
- * - Selecting a saved vehicle updates form fields (make, model, vin).
- * - Manual edit remains possible; validation unchanged.
- * - Loading, empty, and error states are implemented for the list.
- *
- * TODO(API - mutations):
- * - Add "Add vehicle" flow -> INSERT into user_vehicles
- * - Edit vehicle details -> UPDATE user_vehicles
- * - Delete vehicle -> DELETE from user_vehicles
+ * TODO: Extract FormField and CardList components.
  */
 export default function VehicleStep({ onValidChange }) {
   const { vehicle, setVehicle } = useBooking();
   const { user } = useAuth();
   const supabase = getSupabaseClient();
 
-  // Remove 'year' from local state shape; include optional id, nickname when selecting existing
   const [local, setLocal] = useState(
     vehicle && typeof vehicle === "object"
       ? {
@@ -41,12 +28,10 @@ export default function VehicleStep({ onValidChange }) {
   );
   const [touched, setTouched] = useState(false);
 
-  // Supabase list state
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
   const [vehicles, setVehicles] = useState([]);
 
-  // Fetch vehicles for current user
   useEffect(() => {
     let cancelled = false;
 
@@ -54,7 +39,6 @@ export default function VehicleStep({ onValidChange }) {
       setLoading(true);
       setListError("");
       try {
-        // Use auth.getUser to ensure fresh user id if needed
         let userId = user?.id || null;
         if (!userId) {
           const { data, error } = await supabase.auth.getUser();
@@ -62,10 +46,7 @@ export default function VehicleStep({ onValidChange }) {
           userId = data?.user?.id || null;
         }
         if (!userId) {
-          // No authenticated user; show empty list
-          if (!cancelled) {
-            setVehicles([]);
-          }
+          if (!cancelled) setVehicles([]);
           return;
         }
 
@@ -76,9 +57,7 @@ export default function VehicleStep({ onValidChange }) {
           .order("id", { ascending: true });
         if (error) throw error;
 
-        if (!cancelled) {
-          setVehicles(Array.isArray(data) ? data : []);
-        }
+        if (!cancelled) setVehicles(Array.isArray(data) ? data : []);
       } catch (e) {
         if (!cancelled) {
           setListError(e?.message || "Failed to load your vehicles.");
@@ -90,13 +69,10 @@ export default function VehicleStep({ onValidChange }) {
     }
 
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user?.id]);
 
-  // Keep upstream context state and validity in sync with local edits or selections
   useEffect(() => {
     const next = {
       id: local.id,
@@ -129,22 +105,22 @@ export default function VehicleStep({ onValidChange }) {
   }
 
   return (
-    <div className="card" aria-labelledby="vehicle-step-title">
+    <section className="card" aria-labelledby="vehicle-step-title">
       <h3 id="vehicle-step-title" className="section-title">Select Vehicle</h3>
       <p className="subtitle">Choose a saved vehicle or enter your vehicle details. VIN is optional.</p>
 
       {/* Saved vehicles list */}
       <section aria-label="Saved vehicles">
-        {loading && <div className="card" style={{ background: "var(--bg)" }}>Loading your vehicles...</div>}
+        {loading && <div className="card" style={{ background: "var(--background)" }}>Loading your vehicles...</div>}
         {listError && (
           <div className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
             {listError}
           </div>
         )}
         {emptyList && (
-          <div className="card" style={{ background: "var(--bg)", color: "var(--muted)" }}>
+          <div className="card" style={{ background: "var(--background)", color: "var(--muted)" }}>
             You have no saved vehicles yet.
-            {/* TODO(API): Add "Add Vehicle" action to save the current form to Supabase */}
+            {/* TODO: Add "Add Vehicle" flow (insert) */}
           </div>
         )}
 
@@ -164,7 +140,7 @@ export default function VehicleStep({ onValidChange }) {
                   style={{
                     gridColumn: "span 4",
                     textAlign: "left",
-                    borderColor: active ? "#93C5FD" : "#E5E7EB",
+                    borderColor: active ? "#93C5FD" : "var(--border)",
                     background: active ? "#F3F4F6" : "var(--surface)",
                     cursor: "pointer",
                   }}
@@ -174,7 +150,6 @@ export default function VehicleStep({ onValidChange }) {
                 >
                   <strong>{title}</strong>
                   <div className="subtitle" style={{ marginTop: 4 }}>VIN: {v.vin || "—"}</div>
-                  {/* TODO(API): Add small Edit/Delete buttons per item for future mutations */}
                 </button>
               );
             })}
@@ -182,7 +157,7 @@ export default function VehicleStep({ onValidChange }) {
         )}
       </section>
 
-      {/* Manual entry form (kept as-is, drives validation and global booking state) */}
+      {/* Manual form */}
       <div className="row" style={{ flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 240px", minWidth: 240 }}>
           <label className="label" htmlFor="vehicle-make">Make</label>
@@ -236,13 +211,7 @@ export default function VehicleStep({ onValidChange }) {
           />
         </div>
       </div>
-
-      {/* TODO(API): Add "Save this vehicle" button to insert/update in Supabase.
-          - If local.id exists -> UPDATE user_vehicles where id
-          - Else -> INSERT with user_id = current user id
-          - Also add a small "Remove" link to DELETE user_vehicles
-          These are intentionally not implemented in this step (read-only listing). */}
-    </div>
+    </section>
   );
 }
 

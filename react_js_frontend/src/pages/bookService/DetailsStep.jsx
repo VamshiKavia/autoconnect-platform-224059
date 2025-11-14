@@ -3,9 +3,7 @@ import { useBooking } from "./context";
 
 /**
 // PUBLIC_INTERFACE
- * DetailsStep - Step 5: Enter contact details and preferences.
- *
- * Validates: name, phone (basic), email (basic).
+ * DetailsStep - Step 5: Enter contact details and preferences with Ocean styling.
  */
 export default function DetailsStep({ onValidChange }) {
   const { details, setDetails } = useBooking();

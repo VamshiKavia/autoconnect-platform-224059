@@ -4,24 +4,8 @@ import useUser from '../hooks/useUser';
 
 /**
  * PUBLIC_INTERFACE
- * MyBookings
- * A minimalist "My Bookings" page that lists the authenticated user's service bookings.
- * - Fetches from Supabase 'service_bookings' filtered by auth user id with related info:
- *   vehicle (make/model), service type (name), service center (name/address), and slot start/end via slot_id
- * - Shows loading, empty, and error states
- * - Displays status and scheduled time
- * - Provides actions: View details (inline drawer/modal) and Cancel (TODO placeholder)
- *
- * Accessibility: Uses semantic regions, headings, buttons with aria attributes.
- * Styling: Ocean Professional minimalist theme via utility CSS classes.
- *
- * Environment:
- * - Uses existing Supabase client configured with REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_KEY
- *
- * TODO:
- * - Pagination/infinite scroll for large result sets
- * - Cancel mutation (requires backend policy/row-level security and confirmation)
- * - Filters for status/date range
+ * MyBookings - Lists authenticated user's service bookings with Ocean Professional UI.
+ * - Supabase read-only; no logic changes beyond UI
  */
 export default function MyBookings() {
   const { user, loading: userLoading } = useUser();
@@ -42,12 +26,6 @@ export default function MyBookings() {
       setError(null);
 
       try {
-        // Query bookings for current user with related lookups via foreign keys
-        // This assumes foreign key relationships are defined in Supabase:
-        // - service_bookings.vehicle_id -> vehicles.id
-        // - service_bookings.service_type_id -> service_types.id
-        // - service_bookings.service_center_id -> service_centers.id
-        // - service_bookings.slot_id -> service_slots.id
         const { data, error: qErr } = await supabase
           .from('service_bookings')
           .select(`
@@ -77,7 +55,7 @@ export default function MyBookings() {
               end_at
             )
           `)
-          .eq('user_id', user.id) // filter by current authenticated user
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
         if (qErr) {
@@ -97,15 +75,12 @@ export default function MyBookings() {
     if (!userLoading && user) {
       load();
     } else if (!userLoading && !user) {
-      // no user logged in -> empty state prompt
       setBookings([]);
       setStatus('success');
     }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [user, userLoading]);
+    return () => { isMounted = false; };
+  }, [user, userLoading, supabase]);
 
   function formatDateTime(dt) {
     try {
@@ -124,14 +99,24 @@ export default function MyBookings() {
   }
 
   function statusBadge(s) {
-    const map = {
-      pending: 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200',
-      confirmed: 'bg-green-50 text-green-700 ring-1 ring-green-200',
-      completed: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-      cancelled: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
+    const text = String(s || '').toLowerCase();
+    const style = {
+      padding: '2px 8px',
+      borderRadius: 999,
+      fontSize: 12,
+      fontWeight: 600,
+      border: '1px solid',
+      display: 'inline-flex',
+      alignItems: 'center'
     };
-    const cls = map[String(s || '').toLowerCase()] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
-    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{s || 'unknown'}</span>;
+    const map = {
+      pending: { background: '#FEF3C7', color: '#92400E', borderColor: '#FDE68A' },
+      confirmed: { background: '#D1FAE5', color: '#065F46', borderColor: '#A7F3D0' },
+      completed: { background: '#DBEAFE', color: '#1E3A8A', borderColor: '#BFDBFE' },
+      cancelled: { background: '#F3F4F6', color: '#374151', borderColor: '#E5E7EB' },
+    };
+    const st = map[text] || { background: '#F3F4F6', color: '#374151', borderColor: '#E5E7EB' };
+    return <span style={{ ...style, background: st.background, color: st.color, borderColor: st.borderColor }}>{s || 'unknown'}</span>;
   }
 
   function BookingDetails({ booking }) {
@@ -146,54 +131,54 @@ export default function MyBookings() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="booking-details-title"
-        className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/30"
+        className="fixed inset-0 z-40"
         onClick={() => setSelected(null)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}
       >
         <div
-          className="w-full sm:max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-6 sm:p-8"
+          className="card"
+          style={{ width: '100%', maxWidth: 560, background: '#fff' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-4">
-            <h2 id="booking-details-title" className="text-lg font-semibold text-gray-900">
-              Booking Details
-            </h2>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <h2 id="booking-details-title" className="section-title">Booking Details</h2>
             <button
               type="button"
               onClick={() => setSelected(null)}
-              className="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300 rounded"
+              className="btn secondary"
               aria-label="Close details"
             >
               ✕
             </button>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Detail label="Status">{statusBadge(booking.status)}</Detail>
-            <Detail label="Scheduled">
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(12, 1fr)', gap: 12, marginTop: 12 }}>
+            <Detail label="Status" colSpan={6}>{statusBadge(booking.status)}</Detail>
+            <Detail label="Scheduled" colSpan={6}>
               {formatDateTime(slot?.start_at)} - {formatDateTime(slot?.end_at)}
             </Detail>
-            <Detail label="Service Type">{serviceType?.name || '—'}</Detail>
-            <Detail label="Vehicle">
+            <Detail label="Service Type" colSpan={6}>{serviceType?.name || '—'}</Detail>
+            <Detail label="Vehicle" colSpan={6}>
               {vehicle ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || '—' : '—'}
             </Detail>
-            <Detail label="Service Center">{center?.name || '—'}</Detail>
-            <Detail label="Address">{center?.address || '—'}</Detail>
-            <Detail label="Created">{formatDateTime(booking.created_at)}</Detail>
-            <Detail label="Updated">{formatDateTime(booking.updated_at)}</Detail>
+            <Detail label="Service Center" colSpan={6}>{center?.name || '—'}</Detail>
+            <Detail label="Address" colSpan={6}>{center?.address || '—'}</Detail>
+            <Detail label="Created" colSpan={6}>{formatDateTime(booking.created_at)}</Detail>
+            <Detail label="Updated" colSpan={6}>{formatDateTime(booking.updated_at)}</Detail>
           </div>
 
           {booking.notes && (
-            <div className="mt-6">
-              <div className="text-sm font-medium text-gray-700 mb-1">Customer Notes</div>
-              <p className="text-sm text-gray-600 whitespace-pre-line">{booking.notes}</p>
+            <div style={{ marginTop: 12 }}>
+              <div className="label" style={{ marginBottom: 4 }}>Customer Notes</div>
+              <p style={{ color: 'var(--text)' }}>{booking.notes}</p>
             </div>
           )}
 
-          <div className="mt-6 flex items-center justify-end gap-3">
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
             <button
               type="button"
               onClick={() => setSelected(null)}
-              className="px-4 py-2 rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              className="btn secondary"
             >
               Close
             </button>
@@ -201,17 +186,15 @@ export default function MyBookings() {
               type="button"
               disabled={String(booking.status).toLowerCase() === 'cancelled'}
               onClick={() => {
-                // TODO: Implement cancel mutation with confirmation dialog
-                // - Ensure RLS policy allows user to cancel only their booking
-                // - Optimistically update UI, re-fetch on success
-                // - Handle and surface errors to user
+                // TODO: Implement cancel mutation with confirmation dialog and RLS check
                 alert('Cancel booking: TODO');
               }}
-              className={`px-4 py-2 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-300 ${
-                String(booking.status).toLowerCase() === 'cancelled'
-                  ? 'bg-red-300 cursor-not-allowed'
-                  : 'bg-red-500 hover:bg-red-600'
-              }`}
+              className="btn"
+              aria-disabled={String(booking.status).toLowerCase() === 'cancelled'}
+              style={{
+                background: String(booking.status).toLowerCase() === 'cancelled' ? '#EF9A9A' : 'var(--error)',
+                borderColor: String(booking.status).toLowerCase() === 'cancelled' ? '#EF9A9A' : 'var(--error)'
+              }}
             >
               Cancel booking
             </button>
@@ -221,11 +204,11 @@ export default function MyBookings() {
     );
   }
 
-  function Detail({ label, children }) {
+  function Detail({ label, colSpan = 6, children }) {
     return (
-      <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-        <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-        <div className="mt-1 text-sm text-gray-900">{children}</div>
+      <div className="card" style={{ gridColumn: `span ${colSpan}`, background: 'var(--background)' }}>
+        <div className="label">{label}</div>
+        <div style={{ marginTop: 4 }}>{children}</div>
       </div>
     );
   }
@@ -233,8 +216,8 @@ export default function MyBookings() {
   const Content = () => {
     if (userLoading || status === 'loading') {
       return (
-        <div role="status" aria-live="polite" className="flex items-center gap-3 text-gray-600">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+        <div role="status" aria-live="polite" className="row" style={{ color: 'var(--muted)' }}>
+          <div className="skeleton" style={{ width: 16, height: 16, borderRadius: 999 }} />
           <span>Loading your bookings...</span>
         </div>
       );
@@ -242,81 +225,69 @@ export default function MyBookings() {
 
     if (!user) {
       return (
-        <div className="text-gray-700">
-          <p className="mb-2">You are not signed in.</p>
-          <a
-            href="/login"
-            className="inline-block text-sm text-white bg-gray-800 hover:bg-gray-900 px-4 py-2 rounded-md"
-          >
-            Sign in to view bookings
-          </a>
+        <div className="card">
+          <div className="banner banner--warn" role="alert" aria-live="polite">
+            <div>⚠️</div>
+            <div>
+              <strong>Sign in required</strong>
+              <p className="muted" style={{ margin: 0 }}>Please sign in to view your bookings.</p>
+            </div>
+          </div>
         </div>
       );
     }
 
     if (status === 'error') {
       return (
-        <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">
+        <div role="alert" className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
           We couldn’t load your bookings right now. Please try again later.
-          <div className="mt-1 text-sm text-red-600/80">{error}</div>
+          <div className="subtitle" style={{ marginTop: 6 }}>{error}</div>
         </div>
       );
     }
 
     if (!hasData) {
       return (
-        <div className="rounded-lg border border-gray-200 p-8 text-center">
-          <div className="text-gray-900 font-medium">No bookings yet</div>
-          <p className="text-gray-600 mt-1">When you book a service, it will appear here.</p>
-          <a
-            href="/book-service"
-            className="inline-block mt-4 text-sm text-white bg-gray-800 hover:bg-gray-900 px-4 py-2 rounded-md"
-          >
-            Book a service
-          </a>
+        <div className="card">
+          <div className="card--section">
+            <strong>No bookings yet</strong>
+            <p className="muted" style={{ margin: 0 }}>When you book a service, it will appear here.</p>
+            {/* TODO: Consider adding a primary CTA to navigate to booking flow */}
+          </div>
         </div>
       );
     }
 
     // Responsive cards on mobile, table on large screens
     return (
-      <div className="space-y-4">
+      <div className="stack">
         {/* Cards (mobile-first) */}
-        <div className="grid grid-cols-1 gap-4 lg:hidden">
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(12, 1fr)' }}>
           {bookings.map((b) => {
             const vehicle = b.vehicles;
             const serviceType = b.service_types;
             const center = b.service_centers;
             const slot = b.service_slots;
             return (
-              <article key={b.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold text-gray-900">
-                    {serviceType?.name || 'Service'} • {vehicle ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() : 'Vehicle'}
+              <article key={b.id} className="card" style={{ gridColumn: "span 12" }}>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
+                    <div style={{ fontWeight: 700 }}>
+                      {serviceType?.name || 'Service'} • {vehicle ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() : 'Vehicle'}
+                    </div>
+                    <div className="subtitle">{formatDateTime(slot?.start_at)}</div>
                   </div>
                   {statusBadge(b.status)}
                 </div>
-                <dl className="mt-3 grid grid-cols-2 gap-3">
-                  <div>
-                    <dt className="text-xs text-gray-500">Scheduled</dt>
-                    <dd className="text-sm text-gray-900">
-                      {formatDateTime(slot?.start_at)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500">Center</dt>
-                    <dd className="text-sm text-gray-900">{center?.name || '—'}</dd>
-                  </div>
-                  <div className="col-span-2">
-                    <dt className="text-xs text-gray-500">Address</dt>
-                    <dd className="text-sm text-gray-700">{center?.address || '—'}</dd>
-                  </div>
-                </dl>
-                <div className="mt-4 flex items-center justify-end gap-2">
+                <div className="row" style={{ gap: 16, marginTop: 8, flexWrap: "wrap" }}>
+                  <div className="subtitle"><strong>Center:</strong> {center?.name || '—'}</div>
+                  <div className="subtitle"><strong>Address:</strong> {center?.address || '—'}</div>
+                </div>
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
                   <button
                     type="button"
                     onClick={() => setSelected(b)}
-                    className="px-3 py-1.5 rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 text-sm"
+                    className="btn secondary"
                     aria-haspopup="dialog"
                     aria-expanded={selected?.id === b.id}
                     aria-controls="booking-details"
@@ -327,11 +298,12 @@ export default function MyBookings() {
                     type="button"
                     disabled={String(b.status).toLowerCase() === 'cancelled'}
                     onClick={() => alert('Cancel booking: TODO')}
-                    className={`px-3 py-1.5 rounded-md text-white text-sm ${
-                      String(b.status).toLowerCase() === 'cancelled'
-                        ? 'bg-red-300 cursor-not-allowed'
-                        : 'bg-red-500 hover:bg-red-600'
-                    }`}
+                    className="btn"
+                    aria-disabled={String(b.status).toLowerCase() === 'cancelled'}
+                    style={{
+                      background: String(b.status).toLowerCase() === 'cancelled' ? '#EF9A9A' : 'var(--error)',
+                      borderColor: String(b.status).toLowerCase() === 'cancelled' ? '#EF9A9A' : 'var(--error)'
+                    }}
                   >
                     Cancel
                   </button>
@@ -341,84 +313,23 @@ export default function MyBookings() {
           })}
         </div>
 
-        {/* Table (large screens) */}
-        <div className="hidden lg:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                <th scope="col" className="px-6 py-3">Service</th>
-                <th scope="col" className="px-6 py-3">Vehicle</th>
-                <th scope="col" className="px-6 py-3">Center</th>
-                <th scope="col" className="px-6 py-3">Scheduled</th>
-                <th scope="col" className="px-6 py-3">Status</th>
-                <th scope="col" className="px-6 py-3 sr-only">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {bookings.map((b) => {
-                const vehicle = b.vehicles;
-                const serviceType = b.service_types;
-                const center = b.service_centers;
-                const slot = b.service_slots;
-                return (
-                  <tr key={b.id} className="text-sm text-gray-900">
-                    <td className="px-6 py-4">{serviceType?.name || '—'}</td>
-                    <td className="px-6 py-4">{vehicle ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || '—' : '—'}</td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium">{center?.name || '—'}</div>
-                      <div className="text-gray-500 text-xs">{center?.address || ''}</div>
-                    </td>
-                    <td className="px-6 py-4">{formatDateTime(slot?.start_at)} - {formatDateTime(slot?.end_at)}</td>
-                    <td className="px-6 py-4">{statusBadge(b.status)}</td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelected(b)}
-                          className="px-3 py-1.5 rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 text-sm"
-                          aria-haspopup="dialog"
-                          aria-expanded={selected?.id === b.id}
-                        >
-                          View
-                        </button>
-                        <button
-                          type="button"
-                          disabled={String(b.status).toLowerCase() === 'cancelled'}
-                          onClick={() => alert('Cancel booking: TODO')}
-                          className={`px-3 py-1.5 rounded-md text-white text-sm ${
-                            String(b.status).toLowerCase() === 'cancelled'
-                              ? 'bg-red-300 cursor-not-allowed'
-                              : 'bg-red-500 hover:bg-red-600'
-                          }`}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
         {selected && <BookingDetails booking={selected} />}
       </div>
     );
   };
 
   return (
-    <main className="min-h-[60vh] bg-gray-50">
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">My Bookings</h1>
-          <p className="mt-1 text-gray-600 text-sm">
+    <main style={{ background: '#F3F4F6', minHeight: '60vh' }}>
+      <section className="container">
+        <header style={{ marginBottom: 12 }}>
+          <h1 className="section-title" style={{ fontSize: 22 }}>My Bookings</h1>
+          <p className="subtitle" style={{ margin: 0 }}>
             View your upcoming and past service bookings.
           </p>
         </header>
 
         {/* Placeholder for future filters */}
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="row" style={{ marginBottom: 12 }}>
           {/* TODO: Add status/date filters */}
         </div>
 

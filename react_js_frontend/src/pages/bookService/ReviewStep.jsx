@@ -4,29 +4,17 @@ import getSupabaseClient from "../../lib/supabaseClient";
 
 /**
 // PUBLIC_INTERFACE
- * ReviewStep - Step 6: Summarize all selections and provide confirm action.
- *
- * On confirm:
- * - Validates all required selections exist
- * - Fetches current user via supabase.auth.getUser()
- * - Inserts into service_bookings with RLS-compatible user_id (auth.uid())
- * - Fields: user_id, vehicle_id (from selected vehicle.id if exists), service_type_id,
- *   service_center_id, slot_id, contact_name, contact_phone, contact_email,
- *   pickup_drop, notes, estimated_price, estimated_duration_minutes, status='pending'
- * - Shows loading state, success confirmation with booking id, and error state
- *
- * TODO(Server): Add server-side validation and conflict checking to avoid double booking.
+ * ReviewStep - Step 6: Summarize selections and allow confirmation with polished UI.
+ * No changes to Supabase setup; relies on existing configuration.
  */
 export default function ReviewStep({ canSubmit }) {
   const { vehicle, serviceType, center, dateTime, details } = useBooking();
   const supabase = getSupabaseClient();
 
-  // UI state
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [success, setSuccess] = useState(null); // { id, reference } or similar
+  const [success, setSuccess] = useState(null);
 
-  // Derived values for validation and payload
   const requiredReady = useMemo(() => {
     const hasVehicle = !!(vehicle && (vehicle.make || vehicle.model));
     const hasServiceType = !!serviceType?.id;
@@ -40,17 +28,11 @@ export default function ReviewStep({ canSubmit }) {
 
   // PUBLIC_INTERFACE
   async function handleConfirm() {
-    /**
-     * Attempt to create a booking row in Supabase.
-     * Security: Relies on RLS policy allowing insert where user_id = auth.uid().
-     * The user must be authenticated; otherwise, we show an error.
-     */
     if (disabled) return;
 
     setSubmitting(true);
     setErrorMsg("");
     try {
-      // Get authenticated user
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       const userId = authData?.user?.id;
@@ -58,10 +40,8 @@ export default function ReviewStep({ canSubmit }) {
         throw new Error("You must be signed in to confirm a booking.");
       }
 
-      // Collect payload
       const payload = {
         user_id: userId,
-        // vehicle_id optional: if user selected a saved vehicle with an id; else null
         vehicle_id: vehicle?.id || null,
         service_type_id: serviceType?.id,
         service_center_id: center?.id,
@@ -76,10 +56,8 @@ export default function ReviewStep({ canSubmit }) {
         status: "pending",
       };
 
-      // Minimal client-side validation to prevent malformed insert
       validatePayload(payload);
 
-      // Insert row; select id back for reference
       const { data, error } = await supabase
         .from("service_bookings")
         .insert(payload)
@@ -88,8 +66,7 @@ export default function ReviewStep({ canSubmit }) {
 
       if (error) throw error;
 
-      const bookingId = data?.id;
-      setSuccess({ id: bookingId });
+      setSuccess({ id: data?.id });
     } catch (e) {
       setErrorMsg(e?.message || "Failed to create booking. Please try again.");
     } finally {
@@ -97,16 +74,15 @@ export default function ReviewStep({ canSubmit }) {
     }
   }
 
-  // Success view
   if (success?.id) {
     return (
-      <div className="card" aria-live="polite" aria-atomic="true" aria-labelledby="booking-success-title">
+      <section className="card" aria-live="polite" aria-atomic="true" aria-labelledby="booking-success-title">
         <h3 id="booking-success-title" className="section-title">Booking Confirmed</h3>
         <p className="subtitle">
           Your booking has been created successfully. Reference:
           <strong> #{String(success.id)}</strong>
         </p>
-        <div className="card" style={{ background: "var(--bg)" }}>
+        <div className="card" style={{ background: "var(--background)" }}>
           <div className="label">Summary</div>
           <ul style={{ marginTop: 6 }}>
             <li>Vehicle: {(vehicle?.make || "-")} {(vehicle?.model || "")}{vehicle?.vin ? ` (VIN: ${vehicle.vin})` : ""}</li>
@@ -121,12 +97,12 @@ export default function ReviewStep({ canSubmit }) {
         <div className="subtitle" style={{ marginTop: 8 }}>
           Steps: {BOOKING_STEPS.join(" → ")}
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="card" aria-labelledby="review-step-title">
+    <section className="card" aria-labelledby="review-step-title">
       <h3 id="review-step-title" className="section-title">Review & Confirm</h3>
       <p className="subtitle">Verify your details before submitting.</p>
 
@@ -159,9 +135,7 @@ export default function ReviewStep({ canSubmit }) {
 
         <SummaryCard title="Date & Time" index={3}>
           <div>{dateTime?.date || "-"}</div>
-          <div className="subtitle">
-            {dateTime?.slot || "-"}
-          </div>
+          <div className="subtitle">{dateTime?.slot || "-"}</div>
         </SummaryCard>
 
         <SummaryCard title="Details" index={4}>
@@ -183,7 +157,6 @@ export default function ReviewStep({ canSubmit }) {
         </SummaryCard>
       </div>
 
-      {/* Error banner */}
       {errorMsg && (
         <div
           className="card"
@@ -208,9 +181,7 @@ export default function ReviewStep({ canSubmit }) {
       <div className="subtitle" style={{ marginTop: 8 }}>
         Steps: {BOOKING_STEPS.join(" → ")}
       </div>
-
-      {/* TODO(Server): add conflict checking (e.g., capacity, double-booking) on server-side. */}
-    </div>
+    </section>
   );
 }
 
@@ -218,9 +189,7 @@ function isFiniteNumber(v) {
   const n = Number(v);
   return Number.isFinite(n);
 }
-
 function validatePayload(p) {
-  // Simple required checks; server must re-validate
   if (!p.user_id) throw new Error("Not signed in.");
   if (!p.service_type_id) throw new Error("Service type is missing.");
   if (!p.service_center_id) throw new Error("Service center is missing.");
@@ -229,12 +198,11 @@ function validatePayload(p) {
     throw new Error("Contact details are incomplete.");
   }
 }
-
 function SummaryCard({ title, index, children }) {
   return (
     <section
       className="card"
-      style={{ gridColumn: "span 6", background: "var(--bg)" }}
+      style={{ gridColumn: "span 6", background: "var(--background)" }}
       role="listitem"
       aria-labelledby={`summary-${index}`}
     >
