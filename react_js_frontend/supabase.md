@@ -161,6 +161,40 @@ In Supabase dashboard:
 - The client constructs a date range from the user's local YYYY-MM-DD (00:00..23:59:59.999) and compares to timestamptz in UTC.
 - Consider moving this logic server-side or adding center-level timezone metadata to avoid ambiguity.
 
+## My Bookings page (frontend)
+
+The page `src/pages/MyBookings.jsx` lists the authenticated user's bookings:
+
+- Source: `service_bookings` filtered by `user_id = auth.uid()`
+- Selected relations (requires FKs/relationships set in Supabase):
+  - `vehicles:vehicle_id (id, make, model)`
+  - `service_types:service_type_id (id, name)`
+  - `service_centers:service_center_id (id, name, address)`
+  - `service_slots:slot_id (id, start_at, end_at)`
+
+Example select:
+```
+.from('service_bookings')
+.select(`
+  id, status, notes, created_at, updated_at,
+  vehicles:vehicle_id (id, make, model),
+  service_types:service_type_id (id, name),
+  service_centers:service_center_id (id, name, address),
+  service_slots:slot_id (id, start_at, end_at)
+`)
+.eq('user_id', auth.uid())
+.order('created_at', { ascending: false })
+```
+
+RLS policies to enable:
+- SELECT: Users can read their bookings (user_id = auth.uid()).
+- UPDATE (future cancel feature): Users can update their own bookings (not implemented yet).
+
+TODOs (frontend):
+- Pagination via range() or infinite scroll
+- Filters (status/date)
+- Cancel mutation with confirmation
+
 ## 6) Local verification checklist
 
 1) Start frontend: `npm start` at port 3000

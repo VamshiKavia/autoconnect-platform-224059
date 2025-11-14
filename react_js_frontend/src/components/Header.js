@@ -64,6 +64,14 @@ export default function Header() {
           >
             Book My Service
           </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              "nav-link" + (isActive ? " active" : "")
+            }
+            to="/my-bookings"
+          >
+            My Bookings
+          </NavLink>
         </nav>
 
         <div ref={menuRef} style={{ marginLeft: "auto", position: "relative" }}>

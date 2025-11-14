@@ -9,6 +9,7 @@ import { useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Header from "./components/Header";
 import BookService from "./pages/BookService";
+import MyBookings from "./pages/MyBookings";
 
 /**
 // PUBLIC_INTERFACE
@@ -68,6 +69,7 @@ function AppRoutes() {
       <Route path="/services" element={<Services />} />
       <Route path="/parts" element={<Parts />} />
       <Route path="/book-service" element={<BookService />} />
+      <Route path="/my-bookings" element={<MyBookings />} />
       <Route path="/profile" element={<Profile />} />
       {/* Catch-all inside protected area */}
       <Route path="*" element={<Navigate to="/" replace />} />
