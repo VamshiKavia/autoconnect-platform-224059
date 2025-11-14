@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "../api/client";
+import PartsList from "../components/PartsList";
 
 /**
 // PUBLIC_INTERFACE
  * Parts - shows spare parts listing
  *
- * This page is extended with dedicated sections/cards for:
- * - Wheels, Magwheels, Car Paints, Head Lights, Car Engine
- *
- * Notes on placeholders:
- * - Images below reference /assets/placeholder-*.png. Replace these with final assets
- *   by copying images to public/assets and changing the src paths here accordingly.
- * - Example: Replace "/assets/placeholder-wheels.png" with "/assets/wheels.png".
+ * This page includes:
+ * - Featured categories (static cards following Ocean Professional theme)
+ * - PartsList component backed by Supabase "Car parts" (read-only)
  */
 export default function Parts() {
   const [parts, setParts] = useState([]);
@@ -44,6 +41,7 @@ export default function Parts() {
     return () => observer.disconnect();
   }, [prefersReducedMotion]);
 
+  // Retain existing backend demo call (non-Supabase) for compatibility
   useEffect(() => {
     apiGet("/parts")
       .then(setParts)

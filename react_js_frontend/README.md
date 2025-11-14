@@ -18,8 +18,18 @@ The frontend uses the following env vars (do not hardcode secrets):
 - REACT_APP_HEALTHCHECK_PATH
 - REACT_APP_FEATURE_FLAGS
 - REACT_APP_EXPERIMENTS_ENABLED
+- REACT_APP_SUPABASE_URL
+- REACT_APP_SUPABASE_KEY
 
 Create a .env file locally as needed. See .env.example for typical values.
+
+### Supabase integration
+
+- A reusable client is available at `src/lib/supabaseClient.js` and reads `REACT_APP_SUPABASE_URL` and `REACT_APP_SUPABASE_KEY`.
+- The Parts page (`/parts`) reads from the Supabase table named exactly `"Car parts"` (with a space). Queries quote the table name to ensure proper resolution.
+- Expected columns in `"Car parts"`: `id, title, Description, Category, Features, image_url, created_at, updated_at`.
+- The page implements client-side search (title + Description), category filter (from data), loading/error/empty states, and a details modal.
+- Only read operations are implemented. You must configure your own RLS policies in Supabase.
 
 ### Feature flags
 Set REACT_APP_FEATURE_FLAGS to enable optional behaviors:
@@ -62,4 +72,6 @@ The backend FastAPI app should configure CORS to include these origins.
 - Routing: react-router-dom
 - API client: src/api/client.js using env base URL with `/api` prefix handling and improved error messages
 - Config helpers: src/config.js (feature flags, validation)
+- Supabase client: src/lib/supabaseClient.js
+- Parts list component: src/components/PartsList.js
 - Tests: basic tests in src/api/client.test.js and src/config.test.js
