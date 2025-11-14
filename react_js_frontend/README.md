@@ -1,6 +1,6 @@
 # React Frontend - Ocean Professional
 
-Minimalist SPA for the car company app with navigation, auth (stub), cars, services, parts, and profile management (mock).
+Minimalist SPA for the car company app with navigation, Supabase Auth, cars, services, parts, and profile management.
 
 ## Environment
 
@@ -26,10 +26,16 @@ Create a .env file locally as needed. See .env.example for typical values.
 ### Supabase integration
 
 - A reusable client is available at `src/lib/supabaseClient.js` and reads `REACT_APP_SUPABASE_URL` and `REACT_APP_SUPABASE_KEY`.
-- The Parts page (`/parts`) reads from the Supabase table named exactly `"Car parts"` (with a space). Queries quote the table name to ensure proper resolution.
-- Expected columns in `"Car parts"`: `id, title, Description, Category, Features, image_url, created_at, updated_at`.
-- The page implements client-side search (title + Description), category filter (from data), loading/error/empty states, and a details modal.
-- Only read operations are implemented. You must configure your own RLS policies in Supabase.
+- Auth:
+  - Email/password login and signup are provided at `/login`.
+  - Session persistence and `onAuthStateChange` keep the UI in sync.
+  - Header shows Login when logged out; Profile and Logout when logged in.
+  - `/profile` is protected and updates `user_metadata` fields: `display_name`, `avatar_url`.
+- Parts:
+  - The Parts page (`/parts`) reads from the Supabase table named exactly `"Car parts"` (with a space). Queries quote the table name to ensure proper resolution.
+  - Expected columns in `"Car parts"`: `id, title, Description, Category, Features, image_url, created_at, updated_at`.
+  - The page implements client-side search (title + Description), category filter (from data), loading/error/empty states, and a details modal.
+  - Only read operations are implemented. You must configure your own RLS policies in Supabase.
 
 ### Feature flags
 Set REACT_APP_FEATURE_FLAGS to enable optional behaviors:

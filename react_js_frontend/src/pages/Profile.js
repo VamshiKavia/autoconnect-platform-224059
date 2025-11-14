@@ -1,96 +1,106 @@
 import { useEffect, useState } from "react";
-import { apiGet, apiPut, getAuthHeader } from "../api/client";
+import { useAuth } from "../context/AuthContext";
+import getSupabaseClient from "../lib/supabaseClient";
 
 /**
 // PUBLIC_INTERFACE
- * Profile - view and update user profile (mock)
+ * Profile - display and update Supabase user metadata (display_name, avatar_url).
+ *
+ * - Email is read-only
+ * - Updates via supabase.auth.updateUser({ data: { ... } })
  */
 export default function Profile() {
-  const [profile, setProfile] = useState(null);
+  const { user, refreshUser } = useAuth();
+  const supabase = getSupabaseClient();
+
+  const [displayName, setDisplayName] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
-    async function load() {
-      try {
-        const data = await apiGet("/profile", { headers: { ...getAuthHeader() } });
-        setProfile(data);
-      } catch (e) {
-        setProfile(null);
-      }
-    }
-    load();
-  }, []);
+    const meta = user?.user_metadata || {};
+    setDisplayName(meta.display_name || "");
+    setAvatarUrl(meta.avatar_url || "");
+  }, [user]);
 
-  const onSave = async (e) => {
+  async function onSave(e) {
     e.preventDefault();
     setStatus("");
+    setSaving(true);
     try {
-      const updated = await apiPut(
-        "/profile",
-        {
-          email: profile.email,
-          name: profile.name,
-          bio: profile.bio || "",
-          phone: profile.phone || "",
-          created_at: profile.created_at,
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          display_name: displayName,
+          avatar_url: avatarUrl,
         },
-        { headers: { ...getAuthHeader() } }
-      );
-      setProfile(updated);
+      });
+      if (error) throw error;
+      await refreshUser();
       setStatus("Saved");
       setTimeout(() => setStatus(""), 1500);
-    } catch (e) {
-      setStatus("Failed to save");
+    } catch (e2) {
+      setStatus(e2?.message || "Failed to save");
+    } finally {
+      setSaving(false);
     }
-  };
-
-  if (!profile) {
-    return (
-      <div className="container">
-        <div className="card">Please sign in from the Auth page to view your profile.</div>
-      </div>
-    );
   }
 
   return (
     <div className="container">
       <h2 className="section-title">Your Profile</h2>
-      <p className="subtitle">Manage your personal information.</p>
+      <p className="subtitle">Manage your account details.</p>
+
       <form className="card" onSubmit={onSave} style={{ maxWidth: 640 }}>
         <div className="row" style={{ gap: 16 }}>
           <div style={{ flex: 1 }}>
             <label className="label">Email</label>
-            <input className="input" value={profile.email} disabled readOnly />
+            <input className="input" value={user?.email || ""} disabled readOnly />
           </div>
           <div style={{ flex: 1 }}>
-            <label className="label">Name</label>
+            <label className="label">Display name</label>
             <input
               className="input"
-              value={profile.name || ""}
-              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Your display name"
             />
           </div>
         </div>
+
         <div style={{ height: 12 }} />
-        <label className="label">Phone</label>
+        <label className="label">Avatar URL</label>
         <input
           className="input"
-          value={profile.phone || ""}
-          onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+          value={avatarUrl}
+          onChange={(e) => setAvatarUrl(e.target.value)}
+          placeholder="https://example.com/avatar.png"
         />
-        <div style={{ height: 12 }} />
-        <label className="label">Bio</label>
-        <textarea
-          className="input"
-          rows={4}
-          value={profile.bio || ""}
-          onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-        />
+
+        {avatarUrl ? (
+          <>
+            <div style={{ height: 12 }} />
+            <div className="row" style={{ gap: 16 }}>
+              <img
+                src={avatarUrl}
+                alt="Profile avatar preview"
+                style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", background: "#fff" }}
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+              <div className="subtitle">Preview</div>
+            </div>
+          </>
+        ) : null}
+
         <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
           <div style={{ color: status === "Saved" ? "var(--success)" : "var(--error)" }}>
             {status}
           </div>
-          <button type="submit" className="btn">Save</button>
+          <button type="submit" className="btn" disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </button>
         </div>
       </form>
     </div>

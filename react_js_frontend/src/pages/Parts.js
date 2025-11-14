@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiGet } from "../api/client";
 import PartsList from "../components/PartsList";
+import useUser from "../hooks/useUser";
 
 /**
 // PUBLIC_INTERFACE
@@ -9,10 +11,12 @@ import PartsList from "../components/PartsList";
  * This page includes:
  * - Featured categories (static cards following Ocean Professional theme)
  * - PartsList component backed by Supabase "Car parts" (read-only)
+ * - Login prompt banner when user is not authenticated
  */
 export default function Parts() {
   const [parts, setParts] = useState([]);
   const [error, setError] = useState("");
+  const { isAuthenticated } = useUser();
 
   // Reduced motion preference for animation safety
   const prefersReducedMotion = useMemo(() => {
@@ -112,6 +116,21 @@ export default function Parts() {
     <div className="container">
       <h2 className="section-title">Spare Parts</h2>
       <p className="subtitle">Quality parts for reliable performance.</p>
+
+      {/* Optional login prompt */}
+      {!isAuthenticated && (
+        <div className="card" style={{ marginBottom: 16, borderStyle: "dashed" }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <strong>Sign in to personalize your parts experience</strong>
+              <div className="subtitle" style={{ marginTop: 6 }}>
+                Save favorites and see personalized recommendations.
+              </div>
+            </div>
+            <Link to="/login" className="btn">Login</Link>
+          </div>
+        </div>
+      )}
 
       {/* Featured spare parts cards with placeholder images */}
       <section aria-label="Featured spare parts categories" style={{ marginBottom: 16 }}>

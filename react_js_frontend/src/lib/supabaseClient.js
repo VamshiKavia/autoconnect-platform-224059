@@ -29,7 +29,14 @@ function ensureEnv(name) {
   return val;
 }
 
+// PUBLIC_INTERFACE
 export function getSupabaseClient() {
+  /**
+   * Creates or returns a singleton Supabase client with auth persistence enabled.
+   * - persistSession: true -> saves session in localStorage
+   * - autoRefreshToken: true -> keeps session fresh
+   * - detectSessionInUrl: true -> handles email link flows if used
+   */
   if (supabase) return supabase;
 
   const url = ensureEnv("REACT_APP_SUPABASE_URL");
@@ -38,9 +45,10 @@ export function getSupabaseClient() {
   // Create a single client for the app lifecycle.
   supabase = createClient(url, key, {
     auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: "sb-auth",
     },
     global: {
       headers: {

@@ -1,25 +1,34 @@
-import { Routes, Route, Navigate, NavLink } from "react-router-dom";
+import { Routes, Route, Navigate, NavLink, useNavigate } from "react-router-dom";
 import "./theme.css";
 import Home from "./pages/Home";
 import Services from "./pages/Services";
 import Parts from "./pages/Parts";
 import Profile from "./pages/Profile";
-// Auth page retained but not linked; route commented below to make it unreachable from UI
-// import Auth from "./pages/Auth";
+import Login from "./pages/Login";
+import { useAuth } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 /**
 // PUBLIC_INTERFACE
- * App - Application shell with public navigation and route definitions.
+ * App - Application shell with navigation and route definitions.
  *
- * Changes:
- * - Removed authentication state, ProtectedRoute, and login/auth UI.
- * - All routes are public. Home remains landing page.
- * - Navbar order: Home, Services, Parts, Profile (Profile last).
- * - Standalone /auth route is intentionally disabled in the UI (commented out).
- *
- * Requires being wrapped with <BrowserRouter> in index.js to provide routing context.
+ * - Auth-aware header shows Login when logged out; Profile and Logout when logged in.
+ * - /profile protected via ProtectedRoute; /parts remains public but shows a login prompt if unauthenticated.
+ * - Uses AuthProvider wrapper (in index.js) for auth context.
  */
 function App() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    try {
+      await signOut();
+      navigate("/", { replace: true });
+    } catch {
+      // ignore UI errors, minimalistic UX
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="navbar">
@@ -29,25 +38,42 @@ function App() {
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Parts</NavLink>
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/profile">Profile</NavLink>
+
+            {!user ? (
+              <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/login">Login</NavLink>
+            ) : (
+              <>
+                <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/profile">Profile</NavLink>
+                <button className="nav-link" onClick={handleLogout} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+                  Logout
+                </button>
+              </>
+            )}
           </nav>
         </div>
       </header>
 
       <main className="main">
         <Routes>
-          {/* Public routes */}
+          {/* Public */}
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
+          {/* Parts is public but should encourage login when unauthenticated.
+              The Parts component will render a login prompt banner when user is not logged in. */}
           <Route path="/parts" element={<Parts />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/login" element={<Login />} />
 
-          {/* Keep /auth page file, but make it unreachable from UI for now */}
-          {/*
-          <Route path="/auth" element={<Auth onLogin={() => { /* no-op in public mode */ /* }} />} />
-          */}
+          {/* Protected */}
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Fallback to Home for unknown routes */}
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
