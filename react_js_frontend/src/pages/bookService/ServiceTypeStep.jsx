@@ -8,7 +8,7 @@ import getSupabaseClient from "../../lib/supabaseClient";
  *
  * Schema-aligned query:
  *   supabase
- *     .from('service_types')
+ *     .from('services_catalog') // Note: source table is services_catalog
  *     .select('id,name,description,category,features,image_url')
  *     .order('name', { ascending: true })
  *
@@ -45,9 +45,10 @@ export default function ServiceTypeStep({ onValidChange }) {
 
         const supabase = getSupabaseClient();
 
-        // Exact columns per provided schema image
+        // IMPORTANT: Service catalog source table is services_catalog
+        // Select only the columns used by UI and map/guard in case some fields are absent.
         const { data, error } = await supabase
-          .from("service_types")
+          .from("services_catalog")
           .select("id,name,description,category,features,image_url")
           .order("name", { ascending: true });
 
@@ -57,28 +58,35 @@ export default function ServiceTypeStep({ onValidChange }) {
       } catch (e) {
         const code = e?.code || "";
         const message = e?.message || "";
-        const raw = message.toLowerCase();
+        const raw = String(message || "").toLowerCase();
 
-        let friendly = "Failed to load service types.";
+        // Include table name in error so future mismatches are obvious
+        let friendly = "Failed to load service types from table services_catalog.";
         if (
           raw.includes("permission") ||
           raw.includes("rls") ||
           raw.includes("not authorized") ||
           raw.includes("policy")
         ) {
-          friendly = "You do not have access to view service types.";
+          friendly = "You do not have access to view service types (services_catalog).";
           setRlsWarning(
-            "Reading service_types requires RLS read policies. Enable read access for anon/authenticated as appropriate."
+            "Reading services_catalog requires RLS read policies. Enable read access for anon/authenticated as appropriate."
           );
         } else if (raw.includes("relation") && raw.includes("does not exist")) {
-          friendly = "Table not found. Verify the name public.service_types.";
+          friendly =
+            "Table not found. Verify the name public.services_catalog in your Supabase project.";
         } else if (raw.includes("fetch") || raw.includes("network") || raw.includes("url")) {
           friendly = "Unable to reach Supabase. Check REACT_APP_SUPABASE_URL and connectivity.";
         }
 
         setErr(`${friendly} ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
         // eslint-disable-next-line no-console
-        console.error("[ServiceTypeStep] load error", { code, message, stack: e?.stack });
+        console.error("[ServiceTypeStep] load error", {
+          code,
+          message,
+          stack: e?.stack,
+          table: "services_catalog",
+        });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -113,7 +121,11 @@ export default function ServiceTypeStep({ onValidChange }) {
     };
 
     return (rows || []).map((r) => ({
-      ...r,
+      id: r?.id,
+      name: r?.name ?? "",
+      description: r?.description ?? "",
+      category: r?.category ?? "",
+      image_url: r?.image_url ?? "",
       _features: parseFeatures(r?.features),
     }));
   }, [rows]);
