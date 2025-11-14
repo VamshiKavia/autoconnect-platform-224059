@@ -19,6 +19,16 @@
   --ring: rgba(55, 65, 81, 0.35);
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+  /* Header sizing tokens (restore previous proportions) */
+  --header-height: 64px;
+  --brand-font-size: 18px;
+  --brand-font-weight: 700;
+  --nav-link-font-size: 14px;
+  --nav-gap: 16px;
+
+  /* Media sizing defaults */
+  --card-thumb-max-h: 280px; /* within requested 220–320px range */
 }
 
 /* Base */
@@ -77,6 +87,105 @@ body {
 .row { display: flex; gap: 12px; align-items: center; }
 .stack { display: grid; gap: 16px; }
 .stack-sm { display: grid; gap: 8px; }
+
+/* Header (restored minimalist Ocean style) */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+}
+.nav-container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 var(--space);
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--nav-gap);
+}
+.brand {
+  font-size: var(--brand-font-size);
+  font-weight: var(--brand-font-weight);
+  color: var(--text);
+  white-space: nowrap;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--nav-gap);
+  margin-left: 16px;
+}
+.nav-link {
+  text-decoration: none;
+  color: var(--primary);
+  font-size: var(--nav-link-font-size);
+  line-height: 1;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.nav-link:hover {
+  background: var(--surface);
+}
+.nav-link.active {
+  color: var(--text);
+  background: #EEF2FF;
+}
+
+/* Image utilities */
+.img-responsive {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.card-media {
+  width: 100%;
+  max-height: var(--card-thumb-max-h);
+  object-fit: cover;
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eef2ff, #f9fafb);
+}
+.card-media--contain {
+  width: 100%;
+  max-height: var(--card-thumb-max-h);
+  object-fit: contain;
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eef2ff, #f9fafb);
+}
+
+/* Launch and parts grid helpers to prevent oversized media */
+.launch-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+.launch-card {
+  grid-column: span 4;
+}
+
+/* Simple reveal animation */
+.fade-in-up {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+.fade-in-up.is-visible,
+.force-visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* Prevent global img inflation by scoping resets */
+.card img {
+  max-width: 100%;
+}
 
 /* Grid */
 .grid {

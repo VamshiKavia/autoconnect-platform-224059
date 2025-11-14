@@ -52,26 +52,12 @@ export default function Header() {
     <header className="navbar">
       <div className="nav-container">
         <div className="brand">Ocean Motors</div>
-        <nav className="nav-links" aria-label="Primary">
+        <nav className="nav-links header-nav" aria-label="Primary">
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Parts</NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              "nav-link" + (isActive ? " active" : "")
-            }
-            to="/book-service"
-          >
-            Book My Service
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              "nav-link" + (isActive ? " active" : "")
-            }
-            to="/my-bookings"
-          >
-            My Bookings
-          </NavLink>
+          <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/book-service">Book My Service</NavLink>
+          <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/my-bookings">My Bookings</NavLink>
         </nav>
 
         <div ref={menuRef} style={{ marginLeft: "auto", position: "relative" }}>
@@ -89,7 +75,6 @@ export default function Header() {
               cursor: "pointer"
             }}
           >
-            {/* Text-only profile trigger to comply with no-avatar requirement */}
             <span style={{ color: "var(--primary)", fontWeight: 600, fontSize: 14 }}>
               {displayName}
             </span>

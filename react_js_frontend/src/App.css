@@ -31,6 +31,7 @@
 
 .App-logo {
   height: 40vmin;
+  max-width: 100%;
   pointer-events: none;
 }
 

@@ -143,15 +143,9 @@ export default function Home() {
             <img
               src="/assets/launch-hero-19609795.png"
               alt="Ocean Motors Aerexa latest car model"
-              className="hover-zoom"
+              className="hover-zoom img-responsive"
               style={{
-                width: "100%",
-                maxWidth: 640,
-                height: "auto",
-                borderRadius: 8,
-                objectFit: "contain",
-                display: "block",
-                background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
+                maxWidth: 640
               }}
               width={640}
               height={360}
@@ -177,17 +171,10 @@ export default function Home() {
               <img
                 src={item.img}
                 alt={item.alt}
-                className="hover-zoom"
+                className="hover-zoom card-media--contain"
                 width={item.width}
                 height={item.height}
                 loading="lazy"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 8,
-                  objectFit: "contain",
-                  background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                }}
               />
               <figcaption className="sr-only" aria-hidden="true">
                 {item.name}

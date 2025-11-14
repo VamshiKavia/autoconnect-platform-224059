@@ -127,17 +127,10 @@ export default function Parts() {
                 <img
                   src={item.img}
                   alt={item.alt}
-                  className="hover-zoom parts-img"
+                  className="hover-zoom card-media--contain"
                   width={640}
                   height={360}
                   loading="lazy"
-                  style={{
-                    width: "100%",
-                    height: "auto",
-                    borderRadius: 8,
-                    objectFit: "contain",
-                    background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                  }}
                 />
                 <figcaption className="sr-only">{item.title}</figcaption>
               </figure>

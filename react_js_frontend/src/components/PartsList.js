@@ -200,17 +200,9 @@ export default function PartsList() {
                     <img
                       src={img}
                       alt={`${title} image`}
-                      className="hover-zoom"
+                      className="hover-zoom card-media"
                       loading="lazy"
-                      style={{
-                        width: "100%",
-                        height: 200,
-                        objectFit: "cover",
-                        borderRadius: 8,
-                        background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                      }}
                       onError={(e) => {
-                        // fallback styling; no sensitive info
                         e.currentTarget.style.display = "none";
                       }}
                     />
@@ -279,13 +271,8 @@ export default function PartsList() {
                 src={active.image_url}
                 alt={`${active?.title || "Part"} image`}
                 loading="lazy"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 8,
-                  objectFit: "contain",
-                  background: "linear-gradient(135deg, #eef2ff, #f9fafb)",
-                }}
+                className="img-responsive"
+                style={{ borderRadius: 8, background: "linear-gradient(135deg, #eef2ff, #f9fafb)" }}
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                 }}
