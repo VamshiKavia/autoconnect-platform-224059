@@ -87,7 +87,7 @@ export default function Home() {
     <div className="container">
       {/* New Launch hero/card section */}
       <section
-        className="card"
+        className="card new-launch"
         aria-labelledby="new-launch-heading"
         style={{
           padding: 0,
@@ -97,27 +97,20 @@ export default function Home() {
           background: "linear-gradient(180deg, var(--surface), #fff)",
         }}
       >
-        <div
-          className="row"
-          style={{
-            alignItems: "stretch",
-            gap: 0,
-            flexWrap: "wrap",
-          }}
-        >
-          <div className="center-col vcenter-col" style={{ flex: "1 1 360px", padding: 16 }}>
+        <div className="new-launch__hero">
+          <div className="new-launch__hero-text">
             <h2 id="new-launch-heading" className="section-title" style={{ marginBottom: 6 }}>
               New Launch | Aerexa
             </h2>
             <div className="subtitle" style={{ marginBottom: 10 }}>
               Introducing our latest model with refined aerodynamics and performance.
             </div>
-            <p style={{ color: "var(--primary)", lineHeight: 1.6 }}>
+            <p style={{ color: "var(--primary)", lineHeight: 1.6, maxWidth: 640 }}>
               Experience precision engineering, elegant minimalism, and cutting-edge driver
               assistance. Built for efficiency and comfort, crafted for the road ahead.
             </p>
             <div style={{ height: 12 }} />
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
               <a className="btn" href="#latest-launch-details">Explore</a>
               <a
                 className="btn secondary"
@@ -128,25 +121,13 @@ export default function Home() {
               </a>
             </div>
           </div>
-          <div
-            style={{
-              flex: "1 1 420px",
-              minHeight: 220,
-              background: "var(--surface)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 8,
-            }}
-          >
+          <div className="new-launch__hero-media">
             {/* Use root-relative public path so it works in CRA and previews */}
             <img
               src="/assets/launch-hero-19609795.png"
               alt="Ocean Motors Aerexa latest car model"
               className="hover-zoom img-responsive"
-              style={{
-                maxWidth: 640
-              }}
+              style={{ maxWidth: 640 }}
               width={640}
               height={360}
               loading="eager"
@@ -155,11 +136,11 @@ export default function Home() {
         </div>
       </section>
 
-      <h2 className="section-title" id="latest-launch-details">Latest Launches</h2>
-      <p className="subtitle">Discover our newest models and innovations.</p>
+      <h2 className="section-title" id="latest-launch-details" style={{ textAlign: "center" }}>Latest Launches</h2>
+      <p className="subtitle" style={{ textAlign: "center" }}>Discover our newest models and innovations.</p>
 
       {/* Latest Launches Grid (cards with subtle animations) */}
-      <section className="launch-grid" aria-label="Latest launches cards" style={{ marginBottom: 16 }}>
+      <section className="new-launch__grid" aria-label="Latest launches cards" style={{ marginBottom: 16 }}>
         {latestLaunches.map((item, idx) => (
           <article
             key={item.id}

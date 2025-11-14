@@ -165,9 +165,68 @@ body {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 16px;
+  /* Center cards within the grid area on wider screens while preserving responsive wrapping */
+  justify-items: center;
 }
 .launch-card {
+  /* Keep each card at 4 columns on desktop */
   grid-column: span 4;
+  /* Constrain card content width for visual balance */
+  width: 100%;
+  max-width: 340px;
+}
+
+/* New Launch section - scoped alignment helpers */
+.new-launch {
+  /* Inner container stays centered within the main .container */
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center; /* Center headings and description text */
+}
+
+.new-launch__hero {
+  display: grid;
+  /* Create two columns on desktop: text | image */
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  align-items: center;
+  justify-items: center; /* Center content horizontally in each cell */
+}
+
+.new-launch__hero-text {
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  padding: 16px;
+}
+
+.new-launch__hero-media {
+  display: flex;
+  align-items: center;   /* Vertical center image area */
+  justify-content: center; /* Horizontal center image area */
+  min-height: 220px;
+  padding: 8px;
+  background: var(--surface);
+}
+
+/* Ensure the grid of launch cards stays centered and responsive */
+.new-launch__grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+  justify-items: center; /* Center each card */
+}
+
+/* Responsive behavior for mobile/tablet */
+@media (max-width: 900px) {
+  .new-launch__hero {
+    grid-template-columns: 1fr; /* stack hero text and image */
+  }
+}
+
+@media (max-width: 768px) {
+  .launch-card { grid-column: span 12; max-width: 100%; }
+  .new-launch__grid { grid-template-columns: repeat(12, 1fr); }
 }
 
 /* Simple reveal animation */
