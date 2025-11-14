@@ -40,9 +40,21 @@ export default function ReviewStep({ canSubmit }) {
         throw new Error("You must be signed in to confirm a booking.");
       }
 
+      // Validate UUIDs before building payload
+      if (!isUuid(serviceType?.id)) {
+        throw new Error("Selected service type is a placeholder. Please choose a real service type.");
+      }
+      if (!isUuid(center?.id)) {
+        throw new Error("Selected service center is a placeholder. Please choose a real service center.");
+      }
+      if (!isUuid(dateTime?.slotMeta?.id)) {
+        throw new Error("Selected time slot is invalid. Please choose a real slot.");
+      }
+      const vehicleId = vehicle?.id && isUuid(vehicle.id) ? vehicle.id : null;
+
       const payload = {
         user_id: userId,
-        vehicle_id: vehicle?.id || null,
+        vehicle_id: vehicleId,
         service_type_id: serviceType?.id,
         service_center_id: center?.id,
         slot_id: dateTime?.slotMeta?.id,
@@ -167,6 +179,15 @@ export default function ReviewStep({ canSubmit }) {
         </div>
       )}
 
+      {(!serviceType?.id || !center?.id || !dateTime?.slotMeta?.id) && (
+        <div
+          className="card"
+          style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginTop: 12 }}
+          role="status"
+        >
+          One or more selections look like placeholders. Please go back and choose real items before confirming.
+        </div>
+      )}
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
         <button
           className="btn"
@@ -191,12 +212,15 @@ function isFiniteNumber(v) {
 }
 function validatePayload(p) {
   if (!p.user_id) throw new Error("Not signed in.");
-  if (!p.service_type_id) throw new Error("Service type is missing.");
-  if (!p.service_center_id) throw new Error("Service center is missing.");
-  if (!p.slot_id) throw new Error("Time slot is missing.");
+  if (!p.service_type_id || !isUuid(p.service_type_id)) throw new Error("Service type is missing or invalid.");
+  if (!p.service_center_id || !isUuid(p.service_center_id)) throw new Error("Service center is missing or invalid.");
+  if (!p.slot_id || !isUuid(p.slot_id)) throw new Error("Time slot is missing or invalid.");
   if (!p.contact_name || !p.contact_phone || !p.contact_email) {
     throw new Error("Contact details are incomplete.");
   }
+}
+function isUuid(v) {
+  return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 }
 function SummaryCard({ title, index, children }) {
   return (

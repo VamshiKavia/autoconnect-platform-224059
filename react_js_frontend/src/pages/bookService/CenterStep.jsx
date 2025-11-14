@@ -123,19 +123,24 @@ export default function CenterStep({ onValidChange }) {
     return dbRowsCacheRef.current;
   }
 
-  // Merge DB centers with fallback by name (case-insensitive), keeping DB record when duplicate
+  // Merge DB centers with fallback by name (case-insensitive), keeping DB record when duplicate.
+  // Fallback items will be marked with id=null and isFallback=true to avoid misuse in Supabase queries.
   function mergeCenters(dbRows) {
     const norm = (s) => (s || "").toString().trim().toLowerCase();
     const byName = new Map();
     // Put DB rows first to make them authoritative
     for (const r of dbRows) {
-      byName.set(norm(r.name), r);
+      byName.set(norm(r.name), { ...r, isFallback: false });
     }
     // Add fallback items if not present by name
     for (const f of fallbackCenters) {
       const key = norm(f.name);
       if (!byName.has(key)) {
-        byName.set(key, f);
+        byName.set(key, {
+          ...f,
+          id: null, // critical: never carry string fallback id into context
+          isFallback: true,
+        });
       }
     }
     // Return array sorted by name for predictability
@@ -194,7 +199,7 @@ export default function CenterStep({ onValidChange }) {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude } = pos.coords || {};
+        const { latitude, longitude } = (pos.coords || {});
         setGeo({ lat: latitude || null, lng: longitude || null, ready: true, denied: false });
       },
       () => {
@@ -204,11 +209,11 @@ export default function CenterStep({ onValidChange }) {
     );
   }, []);
 
-  // Map selection to booking context and notify validity
+  // Map selection to booking context and notify validity with fallback guard
   useEffect(() => {
-    const found = rows.find((c) => String(c.id) === String(selected)) || null;
-    setCenter(found);
-    onValidChange?.(!!found);
+    const byId = rows.find((c) => c.id && String(c.id) === String(selected)) || null;
+    setCenter(byId || null);
+    onValidChange?.(!!byId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, rows]);
 
@@ -219,7 +224,11 @@ export default function CenterStep({ onValidChange }) {
       <h3 id="center-step-title" className="section-title">Choose Service Center</h3>
       <p className="subtitle">Select your preferred Ocean Motors service location.</p>
 
-      {loading && <div className="card" style={{ background: "var(--background)" }}>Loading service centers...</div>}
+      {loading && (
+        <div className="card" style={{ background: "var(--background)" }}>
+          Loading service centers...
+        </div>
+      )}
 
       {err && (
         <div className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
@@ -234,62 +243,82 @@ export default function CenterStep({ onValidChange }) {
       )}
 
       {!loading && !err && rows.length > 0 && (
-        <div className="grid" role="list" aria-label="Service centers">
-          {rows.map((c) => {
-            const active = String(selected) === String(c.id);
-            const address = formatAddress(c);
-            const distanceKm = geo.ready ? computeDistanceKm(geo.lat, geo.lng, c.latitude, c.longitude) : null;
+        <div>
+          {rows.some((r) => !r.id) && (
+            <div
+              className="card"
+              style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginBottom: 8 }}
+              role="status"
+            >
+              Some centers are shown as placeholders while we finish setup. Please select a center without the “Unavailable” badge.
+            </div>
+          )}
+          <div className="grid" role="list" aria-label="Service centers">
+            {rows.map((c) => {
+              const active = String(selected) === String(c.id);
+              const address = formatAddress(c);
+              const distanceKm = geo.ready ? computeDistanceKm(geo.lat, geo.lng, c.latitude, c.longitude) : null;
 
-            return (
-              <article
-                key={c.id}
-                role="listitem"
-                className="card"
-                style={{
-                  gridColumn: "span 6",
-                  borderColor: active ? "#93C5FD" : "var(--border)",
-                  background: active ? "#F3F4F6" : "var(--surface)",
-                }}
-              >
-                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <strong>{c.name || "Unnamed center"}</strong>
-                    <div className="subtitle" style={{ marginTop: 4 }}>{address || "—"}</div>
+              return (
+                <article
+                  key={c.id ?? `fallback-${c.name}`}
+                  role="listitem"
+                  className="card"
+                  style={{
+                    gridColumn: "span 6",
+                    borderColor: active ? "#93C5FD" : "var(--border)",
+                    background: active ? "#F3F4F6" : "var(--surface)",
+                  }}
+                >
+                  <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <strong>{c.name || "Unnamed center"}</strong>
+                      <div className="subtitle" style={{ marginTop: 4 }}>{address || "—"}</div>
 
-                    {/* Distance placeholder */}
-                    <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-                      {distanceKm != null && isFinite(distanceKm)
-                        ? `${distanceKm.toFixed(1)} km away`
-                        : geo.denied
-                        ? "Location access denied"
-                        : "Distance unavailable"}
+                      {/* Distance placeholder */}
+                      <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
+                        {distanceKm != null && isFinite(distanceKm)
+                          ? `${distanceKm.toFixed(1)} km away`
+                          : geo.denied
+                          ? "Location access denied"
+                          : "Distance unavailable"}
+                      </div>
+
+                      {/* Contact + hours */}
+                      {(c.phone || c.email) && (
+                        <div className="subtitle" style={{ marginTop: 6 }}>
+                          {c.phone ? `☎ ${c.phone}` : ""} {c.phone && c.email ? "• " : ""} {c.email ? c.email : ""}
+                        </div>
+                      )}
+                      {c.opening_hours ? (
+                        <div className="subtitle" style={{ marginTop: 4 }}>
+                          Hours: {c.opening_hours}
+                        </div>
+                      ) : null}
                     </div>
-
-                    {/* Contact + hours */}
-                    {(c.phone || c.email) && (
-                      <div className="subtitle" style={{ marginTop: 6 }}>
-                        {c.phone ? `☎ ${c.phone}` : ""} {c.phone && c.email ? "• " : ""} {c.email ? c.email : ""}
-                      </div>
-                    )}
-                    {c.opening_hours ? (
-                      <div className="subtitle" style={{ marginTop: 4 }}>
-                        Hours: {c.opening_hours}
-                      </div>
-                    ) : null}
+                    <div>
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          if (!c.id) {
+                            // Fallback item: do not allow selecting
+                            return;
+                          }
+                          setSelected(c.id);
+                        }}
+                        aria-label={`Select ${c.name}${!c.id ? " (unavailable placeholder)" : ""}`}
+                        disabled={!c.id}
+                        aria-disabled={!c.id}
+                        title={!c.id ? "This is a placeholder center. Please choose a real center." : undefined}
+                      >
+                        {!c.id ? "Unavailable" : active ? "Selected" : "Select"}
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <button
-                      className="btn"
-                      onClick={() => setSelected(c.id)}
-                      aria-label={`Select ${c.name}`}
-                    >
-                      {active ? "Selected" : "Select"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+                </article>
+              );
+            })}
+          </div>
         </div>
       )}
     </section>
@@ -298,8 +327,11 @@ export default function CenterStep({ onValidChange }) {
 
 /** Mapper and helpers */
 function mapCenterRecord(row) {
+  // If row came from fallback, enforce id=null and mark isFallback true
+  const isFallback = !!row.isFallback || (typeof row.id === "string" && String(row.id).startsWith("fallback-"));
   return {
-    id: row.id,
+    id: isFallback ? null : row.id,
+    isFallback,
     name: row.name || "",
     address_line1: row.address_line1 || "",
     address_line2: row.address_line2 || "",

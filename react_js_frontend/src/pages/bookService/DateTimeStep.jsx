@@ -50,6 +50,18 @@ export default function DateTimeStep({ onValidChange }) {
           return;
         }
 
+        // Guard: require UUIDs for center and optional serviceType before querying
+        if (!isUuid(center.id)) {
+          setErr("Please choose a real service center to see available slots.");
+          setLoading(false);
+          return;
+        }
+        if (serviceType?.id && !isUuid(serviceType.id)) {
+          setErr("Please choose a real service type to see available slots.");
+          setLoading(false);
+          return;
+        }
+
         const supabase = getSupabaseClient();
 
         const { start, end } = dayBounds || {};
@@ -135,6 +147,9 @@ export default function DateTimeStep({ onValidChange }) {
     const nowStr = todayStr();
     return d >= nowStr;
   }
+  function isUuid(v) {
+    return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+  }
   function todayStr() {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -194,6 +209,24 @@ export default function DateTimeStep({ onValidChange }) {
           role="alert"
         >
           {err}
+        </div>
+      )}
+      {date && (!center?.id || (center?.id && !isUuid(center.id))) && (
+        <div
+          className="card"
+          style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginTop: 12 }}
+          role="status"
+        >
+          Please choose a real service center (not a placeholder) to continue.
+        </div>
+      )}
+      {date && serviceType?.id && !isUuid(serviceType.id) && (
+        <div
+          className="card"
+          style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginTop: 12 }}
+          role="status"
+        >
+          Please choose a real service type to filter available slots.
         </div>
       )}
       {date && empty && (

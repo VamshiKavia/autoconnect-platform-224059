@@ -118,14 +118,15 @@ export default function ServiceTypeStep({ onValidChange }) {
     return { data: allRowsCacheRef.current };
   }, [supabase]);
 
-  // Merge DB results with fallback, avoiding duplicates by name (case-insensitive)
+  // Merge DB results with fallback, avoiding duplicates by name (case-insensitive).
+  // Fallback items will get id=null and isFallback=true.
   function mergeWithFallback(dbRows) {
     const norm = (s) => (s || "").toString().trim().toLowerCase();
     const seenByName = new Set(dbRows.map((r) => norm(r.name)));
-    const extras = fallbackServices.filter((f) => !seenByName.has(norm(f.name)));
-    // Ensure prominent items appear first in a sensible order
-    const combined = [...dbRows, ...extras];
-    // Stable sort by name for predictability; design shows grouped cards but alphabetical is fine
+    const extras = fallbackServices
+      .filter((f) => !seenByName.has(norm(f.name)))
+      .map((f) => ({ ...f, id: null, isFallback: true }));
+    const combined = [...dbRows.map((r) => ({ ...r, isFallback: false })), ...extras];
     combined.sort((a, b) => norm(a.name).localeCompare(norm(b.name)));
     return combined;
   }
@@ -166,10 +167,11 @@ export default function ServiceTypeStep({ onValidChange }) {
 
   // Map selection to context
   useEffect(() => {
-    const found = rows.find((s) => String(s.id) === String(selected)) || null;
+    const found = rows.find((s) => s.id && String(s.id) === String(selected)) || null;
+
     const mapped = found
       ? {
-          id: found.id,
+          id: found.id, // guaranteed UUID from DB
           name: found.name || "",
           description: found.description || "",
           price: safeNumber(found.base_price),
@@ -177,9 +179,8 @@ export default function ServiceTypeStep({ onValidChange }) {
           active: !!found.active,
           base_price: found.base_price,
           duration_minutes: found.duration_minutes,
+          isFallback: false,
         }
-      : serviceType && String(serviceType.id) === String(selected)
-      ? serviceType
       : null;
 
     setServiceType(mapped);
@@ -220,44 +221,62 @@ export default function ServiceTypeStep({ onValidChange }) {
       )}
 
       {!loading && !err && rows.length > 0 && (
-        <div className="grid" role="list" aria-label="Service types">
-          {rows.map((svc) => {
-            const isActive = String(selected) === String(svc.id);
-            const price = safeNumber(svc.base_price);
-            const duration = safeNumber(svc.duration_minutes);
-            return (
-              <button
-                key={svc.id}
-                role="listitem"
-                className="card"
-                style={{
-                  gridColumn: "span 4",
-                  textAlign: "left",
-                  borderColor: isActive ? "#93C5FD" : "var(--border)",
-                  background: isActive ? "#F3F4F6" : "var(--surface)",
-                  cursor: "pointer",
-                }}
-                onClick={() => setSelected(svc.id)}
-                aria-pressed={isActive}
-                aria-label={`Select ${svc.name || "service type"}`}
-              >
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                  <strong>{svc.name || "Untitled service"}</strong>
-                  <span className="subtitle">
-                    ${Number(price).toLocaleString()}
-                  </span>
-                </div>
-                <div style={{ color: "var(--muted)", marginTop: 6 }}>
-                  Approx. {duration} min
-                </div>
-                {svc.description ? (
-                  <div className="subtitle" style={{ marginTop: 4 }}>
-                    {svc.description}
+        <div>
+          {rows.some((r) => !r.id) && (
+            <div
+              className="card"
+              style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginBottom: 8 }}
+              role="status"
+            >
+              Some service types are placeholders and cannot be selected yet. Please choose a real item.
+            </div>
+          )}
+          <div className="grid" role="list" aria-label="Service types">
+            {rows.map((svc) => {
+              const isActive = String(selected) === String(svc.id);
+              const price = safeNumber(svc.base_price);
+              const duration = safeNumber(svc.duration_minutes);
+              return (
+                <button
+                  key={svc.id ?? `fallback-${svc.name}`}
+                  role="listitem"
+                  className="card"
+                  style={{
+                    gridColumn: "span 4",
+                    textAlign: "left",
+                    borderColor: isActive ? "#93C5FD" : "var(--border)",
+                    background: isActive ? "#F3F4F6" : "var(--surface)",
+                    cursor: svc.id ? "pointer" : "not-allowed",
+                    opacity: svc.id ? 1 : 0.85,
+                  }}
+                  onClick={() => {
+                    if (!svc.id) return; // block fallback selection
+                    setSelected(svc.id);
+                  }}
+                  aria-pressed={isActive}
+                  aria-label={`Select ${svc.name || "service type"}${!svc.id ? " (placeholder unavailable)" : ""}`}
+                  disabled={!svc.id}
+                  aria-disabled={!svc.id}
+                  title={!svc.id ? "Placeholder item: choose a real service type" : undefined}
+                >
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <strong>{svc.name || "Untitled service"}</strong>
+                    <span className="subtitle">
+                      ${Number(price).toLocaleString()}
+                    </span>
                   </div>
-                ) : null}
-              </button>
-            );
-          })}
+                  <div style={{ color: "var(--muted)", marginTop: 6 }}>
+                    Approx. {duration} min
+                  </div>
+                  {svc.description ? (
+                    <div className="subtitle" style={{ marginTop: 4 }}>
+                      {svc.description}
+                    </div>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </section>
