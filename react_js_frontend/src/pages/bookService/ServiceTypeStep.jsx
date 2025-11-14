@@ -21,7 +21,9 @@ export default function ServiceTypeStep({ onValidChange }) {
   return (
     <div className="card" aria-labelledby="servicetype-step-title">
       <h3 id="servicetype-step-title" className="section-title">Select Service Type</h3>
-      <p className="subtitle">Pick a service to continue. Pricing and durations are estimates.</p>
+      <p className="subtitle">
+        Pick a service to continue. Pricing and durations shown are mock estimates (from values) and will be finalized at the center.
+      </p>
 
       <div className="grid">
         {MockData.serviceTypes.map((svc) => {
@@ -48,6 +50,11 @@ export default function ServiceTypeStep({ onValidChange }) {
               <div style={{ color: "var(--muted)", marginTop: 6 }}>
                 Approx. {svc.duration_min} min
               </div>
+              {svc.note ? (
+                <div className="subtitle" style={{ marginTop: 4 }}>
+                  {svc.note}
+                </div>
+              ) : null}
             </button>
           );
         })}

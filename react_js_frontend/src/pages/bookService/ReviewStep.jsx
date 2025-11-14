@@ -24,9 +24,16 @@ export default function ReviewStep({ canSubmit, onConfirm }) {
         <SummaryCard title="Service Type" index={1}>
           <div>{serviceType?.name || "-"}</div>
           {serviceType && (
-            <div className="subtitle">
-              ${serviceType.price} • {serviceType.duration_min} min
-            </div>
+            <>
+              <div className="subtitle">
+                ${serviceType.price} • {serviceType.duration_min} min
+              </div>
+              {serviceType.note ? (
+                <div className="subtitle" style={{ marginTop: 4 }}>
+                  {serviceType.note}
+                </div>
+              ) : null}
+            </>
           )}
         </SummaryCard>
 

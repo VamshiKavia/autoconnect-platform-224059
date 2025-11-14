@@ -84,9 +84,18 @@ export const MockData = {
     { id: "brakes", name: "Brake Inspection", duration_min: 45, price: 99 },
     { id: "ac", name: "AC Service", duration_min: 60, price: 129 },
     { id: "diagnostics", name: "Diagnostics", duration_min: 60, price: 149 },
-    // Newly added service types
-    { id: "wash", name: "Car Washing", duration_min: 40, price: 49 },
-    { id: "paint", name: "Car Painting", duration_min: 240, price: 799 },
+
+    // NOTE: For ranges, we surface representative "from" values in UI while noting
+    // approximate durations. Replace with backend-provided exact pricing per vehicle/scope.
+    // TODO(API): Replace placeholders with values from backend service-types endpoint.
+
+    // Car Washing: basePrice 40-60, durationMinutes 45-60
+    // Using price: 40 as "from" and duration_min: 45 (shortest typical time)
+    { id: "wash", name: "Car Washing", duration_min: 45, price: 40, note: "From $40 (45-60 min)" },
+
+    // Car Painting: basePrice 300-800+, durationMinutes 240-480 depending on scope
+    // Using price: 300 as "from" and duration_min: 240 (4 hours) as baseline estimate
+    { id: "paint", name: "Car Painting", duration_min: 240, price: 300, note: "From $300 (4-8 hrs+)" },
   ],
   // Centers with simple metadata
   centers: [
