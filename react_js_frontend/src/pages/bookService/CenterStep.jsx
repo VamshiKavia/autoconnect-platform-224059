@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useBooking } from "./context";
 import getSupabaseClient from "../../lib/supabaseClient";
 import { MOCK_CENTERS } from "./mocks";
+import { useLocation } from "react-router-dom";
 
 /**
 // PUBLIC_INTERFACE
@@ -10,8 +11,19 @@ import { MOCK_CENTERS } from "./mocks";
  */
 export default function CenterStep({ onValidChange }) {
   const { center, setCenter, flags } = useBooking();
+  const location = useLocation();
 
-  const [selected, setSelected] = useState(center?.id || "");
+  // Try to preselect from router state or query string
+  const initialSelectedId = (() => {
+    const stateCenter = location?.state?.preselectedCenter;
+    if (stateCenter?.id) return String(stateCenter.id);
+    const params = new URLSearchParams(location?.search || "");
+    const fromQuery = params.get("centerId");
+    if (fromQuery) return String(fromQuery);
+    return center?.id ? String(center.id) : "";
+  })();
+
+  const [selected, setSelected] = useState(initialSelectedId);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(Boolean(flags?.supabaseEnabled));
   const [err, setErr] = useState("");
@@ -53,7 +65,13 @@ export default function CenterStep({ onValidChange }) {
     async function load() {
       setErr("");
       if (!flags?.supabaseEnabled) {
-        setRows(MOCK_CENTERS.map((c) => ({ ...c, address: `${c.address}, ${c.city}` })));
+        setRows(
+          MOCK_CENTERS.map((c) => ({
+            ...c,
+            address: `${c.address}, ${c.city}`,
+            opening_hours: c.opening_hours || c.openingHours || "Mon–Sat 9:00–18:00",
+          }))
+        );
         setLoading(false);
         return;
       }

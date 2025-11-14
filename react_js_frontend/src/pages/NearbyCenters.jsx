@@ -4,6 +4,7 @@ import '../App.css';
 import '../theme.css';
 import { getFeatureFlags, isSupabaseEnabled } from '../utils/featureFlags';
 import { getEnableSupabaseFlag } from '../config';
+import MapPlaceholder from '../components/MapPlaceholder.jsx';
 
 /**
  * PUBLIC_INTERFACE
@@ -90,13 +91,16 @@ export default function NearbyCenters() {
     getEnableSupabaseFlag() || isSupabaseEnabled() || getFeatureFlags().ENABLE_SUPABASE || false;
 
   // UI state
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
-  const [query, setQuery] = useState('');
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('nc:viewMode') || 'list'); // 'list' | 'map'
+  const [query, setQuery] = useState(() => localStorage.getItem('nc:query') || '');
   const [coords, setCoords] = useState(null);
   const [geoError, setGeoError] = useState('');
-  const [radiusKm, setRadiusKm] = useState(25);
-  const [openNowOnly, setOpenNowOnly] = useState(false);
-  const [sortBy, setSortBy] = useState('distance'); // 'distance' | 'rating'
+  const [radiusKm, setRadiusKm] = useState(() => {
+    const v = Number(localStorage.getItem('nc:radiusKm'));
+    return Number.isFinite(v) && v > 0 ? v : 25;
+  });
+  const [openNowOnly, setOpenNowOnly] = useState(() => localStorage.getItem('nc:openNowOnly') === 'true');
+  const [sortBy, setSortBy] = useState(() => localStorage.getItem('nc:sortBy') || 'distance'); // 'distance' | 'rating'
 
   // Centers state (mock for now)
   const [centers, setCenters] = useState([]);
@@ -127,6 +131,12 @@ export default function NearbyCenters() {
       abort = true;
     };
   }, [supabaseEnabled]);
+
+  useEffect(() => { localStorage.setItem('nc:viewMode', viewMode); }, [viewMode]);
+  useEffect(() => { localStorage.setItem('nc:query', query); }, [query]);
+  useEffect(() => { localStorage.setItem('nc:radiusKm', String(radiusKm)); }, [radiusKm]);
+  useEffect(() => { localStorage.setItem('nc:openNowOnly', String(openNowOnly)); }, [openNowOnly]);
+  useEffect(() => { localStorage.setItem('nc:sortBy', sortBy); }, [sortBy]);
 
   // Handle 'Use my location'
   const handleUseMyLocation = () => {
@@ -299,6 +309,12 @@ export default function NearbyCenters() {
             </div>
           ) : null}
 
+          <div className="mt-2 text-xs text-gray-500">
+            {supabaseEnabled
+              ? 'Supabase geo queries will be used when available.'
+              : 'Supabase disabled. Using mock centers; geo queries are TODO.'}
+          </div>
+
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="radius" className="block text-sm font-medium text-gray-700">
@@ -348,12 +364,16 @@ export default function NearbyCenters() {
 
         {/* Results area */}
         {viewMode === 'map' ? (
-          <div
-            className="h-80 w-full bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-500"
-            role="img"
-            aria-label="Map view placeholder"
-          >
-            Map view coming soon
+          <div>
+            <MapPlaceholder
+              height="360px"
+              centers={filteredSorted}
+              userCoords={coords}
+              onPinClick={(c) => handleBook(c)}
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              This is a static preview. TODO: Integrate Mapbox or Google Maps for interactive navigation.
+            </p>
           </div>
         ) : (
           <ul
@@ -373,6 +393,11 @@ export default function NearbyCenters() {
                       {c.name}
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">{c.address}</p>
+                    {c.openingHours ? (
+                      <div className="text-xs text-gray-500 mt-2" aria-label="Opening hours">
+                        Hours: {c.openingHours}
+                      </div>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${c.openNow ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
