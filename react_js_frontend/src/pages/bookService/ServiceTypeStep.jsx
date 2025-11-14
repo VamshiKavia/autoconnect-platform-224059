@@ -36,6 +36,7 @@ export default function ServiceTypeStep({ onValidChange }) {
   const [visibleCount, setVisibleCount] = useState(null); // number | null
   const [seeding, setSeeding] = useState(false);
   const [seedError, setSeedError] = useState("");
+  const [seedSuccess, setSeedSuccess] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +75,9 @@ export default function ServiceTypeStep({ onValidChange }) {
         .select("id,name,description,image_url")
         .order("name", { ascending: true });
 
+      // eslint-disable-next-line no-console
+      console.log("[ServiceTypeStep] Supabase load response", { data, error });
+
       if (error) throw error;
 
       const safe = Array.isArray(data) ? data : [];
@@ -87,18 +91,22 @@ export default function ServiceTypeStep({ onValidChange }) {
     } catch (e) {
       const code = e?.code || "";
       const message = e?.message || "";
-      const raw = String(message || "").toLowerCase();
+      const details = e?.details || "";
+      const hint = e?.hint || "";
+      const raw = String(`${message} ${details} ${hint}` || "").toLowerCase();
 
       let friendly = "Failed to load service types from services_catalog.";
       if (
         raw.includes("permission") ||
         raw.includes("rls") ||
         raw.includes("not authorized") ||
-        raw.includes("policy")
+        raw.includes("policy") ||
+        raw.includes("violates row-level security")
       ) {
-        friendly = "You do not have access to view service types (services_catalog).";
+        friendly =
+          "You do not have access to view service types (services_catalog). RLS policies may be preventing SELECT.";
         setRlsWarning(
-          "Reading services_catalog requires RLS read policies. Enable read access for anon/authenticated as appropriate."
+          "RLS hint: In Supabase, create a SELECT policy on public.services_catalog for anon/authenticated (as appropriate)."
         );
       } else if (raw.includes("relation") && raw.includes("does not exist")) {
         friendly = "Table not found. Verify the name public.services_catalog in your Supabase project.";
@@ -106,11 +114,17 @@ export default function ServiceTypeStep({ onValidChange }) {
         friendly = "Unable to reach Supabase. Check REACT_APP_SUPABASE_URL and connectivity.";
       }
 
-      setErr(`${friendly} ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
+      setErr(
+        `${friendly} ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}${
+          details ? ` — ${details}` : ""
+        }${hint ? ` — ${hint}` : ""}`
+      );
       // eslint-disable-next-line no-console
       console.error("[ServiceTypeStep] load error", {
         code,
         message,
+        details,
+        hint,
         stack: e?.stack,
         table: "services_catalog",
       });
@@ -124,10 +138,11 @@ export default function ServiceTypeStep({ onValidChange }) {
     /**
      * Inserts sample rows into public.services_catalog:
      * - Oil Change, Brake Check, Car Washing, Car Painting
-     * Includes fields: name, description, and image_url if present in schema.
+     * Columns used: name, description, image_url (only if exists)
      * Uses anon key/env vars already configured via Supabase client.
      */
     setSeedError("");
+    setSeedSuccess(false);
     setSeeding(true);
     try {
       const supabase = getSupabaseClient();
@@ -155,41 +170,92 @@ export default function ServiceTypeStep({ onValidChange }) {
         },
       ];
 
-      // Attempt insert with image_url; if column doesn't exist, insert without it.
-      let { error: insertErr } = await supabase.from("services_catalog").insert(
+      // First attempt with aligned columns: name, description, image_url
+      let { data: insData, error: insertErr } = await supabase.from("services_catalog").insert(
         samples.map((s) => ({
           name: s.name,
           description: s.description,
-          image_url: s.image_url, // may fail if column not present
+          image_url: s.image_url,
         }))
       );
 
+      // eslint-disable-next-line no-console
+      console.log("[ServiceTypeStep] Supabase seed insert response", { data: insData, error: insertErr });
+
       if (insertErr) {
-        const raw = (insertErr.message || "").toLowerCase();
-        const columnMissing =
-          raw.includes("column") && raw.includes("image_url") && (raw.includes("does not exist") || raw.includes("missing"));
-        // Retry without image_url if the column seems missing
-        if (columnMissing) {
-          const { error: retryErr } = await supabase.from("services_catalog").insert(
-            samples.map((s) => ({
-              name: s.name,
-              description: s.description,
-            }))
+        const code = insertErr.code || "";
+        const message = insertErr.message || "";
+        const details = insertErr.details || "";
+        const hint = insertErr.hint || "";
+        const raw = `${message} ${details} ${hint}`.toLowerCase();
+
+        // Detect RLS/permission errors explicitly and surface guidance
+        const isRls =
+          raw.includes("permission") ||
+          raw.includes("not authorized") ||
+          raw.includes("policy") ||
+          raw.includes("rls") ||
+          raw.includes("violates row-level security");
+
+        const imageUrlMissing =
+          raw.includes("column") &&
+          raw.includes("image_url") &&
+          (raw.includes("does not exist") || raw.includes("missing") || raw.includes("unknown"));
+
+        if (isRls) {
+          setSeedError(
+            `Insert blocked by RLS/permissions ${code ? `(code: ${code})` : ""} — ${message}${
+              details ? ` — ${details}` : ""
+            }${hint ? ` — ${hint}` : ""}. RLS hint: Create an INSERT policy on public.services_catalog for your role.`
           );
-          if (retryErr) throw retryErr;
+          // Log full response
+          // eslint-disable-next-line no-console
+          console.error("[ServiceTypeStep] seed RLS/permission error", {
+            code,
+            message,
+            details,
+            hint,
+          });
+          return;
+        }
+
+        if (imageUrlMissing) {
+          // Retry without image_url if the column is not present in schema
+          const { data: retryData, error: retryErr } = await supabase
+            .from("services_catalog")
+            .insert(samples.map((s) => ({ name: s.name, description: s.description })));
+
+          // eslint-disable-next-line no-console
+          console.log("[ServiceTypeStep] Supabase seed retry (no image_url) response", {
+            data: retryData,
+            error: retryErr,
+          });
+
+          if (retryErr) {
+            throw retryErr;
+          }
         } else {
+          // Unknown error, rethrow to surface code/message
           throw insertErr;
         }
       }
+
+      setSeedSuccess(true);
 
       // After successful insert, re-fetch list
       await load();
     } catch (e) {
       const code = e?.code || "";
       const message = e?.message || "Failed to seed services_catalog.";
-      setSeedError(`${message} ${code ? `(code: ${code})` : ""}`);
+      const details = e?.details || "";
+      const hint = e?.hint || "";
+      setSeedError(
+        `${message} ${code ? `(code: ${code})` : ""}${details ? ` — ${details}` : ""}${
+          hint ? ` — ${hint}` : ""
+        }`
+      );
       // eslint-disable-next-line no-console
-      console.error("[ServiceTypeStep] seed error", { code, message, stack: e?.stack });
+      console.error("[ServiceTypeStep] seed error", { code, message, details, hint, stack: e?.stack });
     } finally {
       setSeeding(false);
     }
@@ -263,6 +329,16 @@ export default function ServiceTypeStep({ onValidChange }) {
                 {seedError}
               </div>
             )}
+            {seedSuccess && !seedError && (
+              <div
+                className="card"
+                role="status"
+                aria-live="polite"
+                style={{ color: "var(--success)", marginTop: 8, background: "#fff" }}
+              >
+                ✓ Sample services inserted successfully.
+              </div>
+            )}
           </div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <button className="btn secondary" onClick={load} aria-label="Retry loading service types">
@@ -303,7 +379,13 @@ export default function ServiceTypeStep({ onValidChange }) {
         <div className="card" style={{ color: "var(--error)" }}>
           {err}
           <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-            <button className="btn secondary" onClick={load} aria-label="Retry loading after error">
+            <button
+              className="btn secondary"
+              onClick={load}
+              aria-label="Retry loading after error"
+              disabled={seeding}
+              aria-disabled={seeding}
+            >
               Retry
             </button>
             <button
@@ -316,6 +398,16 @@ export default function ServiceTypeStep({ onValidChange }) {
               {seeding ? "Seeding..." : "Seed sample services"}
             </button>
           </div>
+        </div>
+      )}
+      {seedSuccess && !err && (
+        <div
+          className="card"
+          role="status"
+          aria-live="polite"
+          style={{ color: "var(--success)", borderColor: "#A7F3D0", background: "#ECFDF5", marginTop: 12 }}
+        >
+          ✓ Sample services inserted successfully.
         </div>
       )}
       {empty && <EmptyState />}
