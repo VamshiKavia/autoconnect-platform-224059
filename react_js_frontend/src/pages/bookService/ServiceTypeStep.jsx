@@ -166,25 +166,51 @@ export default function ServiceTypeStep({ onValidChange }) {
   }, [fetchAllServerSide, fetchAllClientSide]);
 
   // Map selection to context
+  // Temporary rule: allow selecting fallback items by name; store with id=null and isFallback=true.
+  // TODO(services): Remove fallback selection path once DB seeding is complete.
   useEffect(() => {
-    const found = rows.find((s) => s.id && String(s.id) === String(selected)) || null;
+    // First try DB-backed by id
+    const foundDb = rows.find((s) => s.id && String(s.id) === String(selected)) || null;
 
-    const mapped = found
-      ? {
-          id: found.id, // guaranteed UUID from DB
-          name: found.name || "",
-          description: found.description || "",
-          price: safeNumber(found.base_price),
-          duration_min: safeNumber(found.duration_minutes),
-          active: !!found.active,
-          base_price: found.base_price,
-          duration_minutes: found.duration_minutes,
-          isFallback: false,
-        }
-      : null;
+    if (foundDb) {
+      const mapped = {
+        id: foundDb.id, // guaranteed UUID from DB
+        name: foundDb.name || "",
+        description: foundDb.description || "",
+        price: safeNumber(foundDb.base_price),
+        duration_min: safeNumber(foundDb.duration_minutes),
+        active: !!foundDb.active,
+        base_price: foundDb.base_price,
+        duration_minutes: foundDb.duration_minutes,
+        isFallback: false,
+      };
+      setServiceType(mapped);
+      onValidChange?.(true);
+      return;
+    }
 
-    setServiceType(mapped);
-    onValidChange?.(!!mapped);
+    // If not found by id and there are fallback rows, allow selecting a fallback by its name
+    const fallbackSelected = rows.find((s) => !s.id && s.name && String(s.name) === String(selected)) || null;
+    if (fallbackSelected) {
+      const mapped = {
+        id: null,
+        name: fallbackSelected.name || "",
+        description: fallbackSelected.description || "",
+        price: safeNumber(fallbackSelected.base_price),
+        duration_min: safeNumber(fallbackSelected.duration_minutes),
+        active: !!fallbackSelected.active,
+        base_price: fallbackSelected.base_price,
+        duration_minutes: fallbackSelected.duration_minutes,
+        isFallback: true,
+      };
+      setServiceType(mapped);
+      onValidChange?.(true);
+      return;
+    }
+
+    // Nothing selected
+    setServiceType(null);
+    onValidChange?.(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, rows]);
 
@@ -228,17 +254,20 @@ export default function ServiceTypeStep({ onValidChange }) {
               style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginBottom: 8 }}
               role="status"
             >
-              Some service types are placeholders and cannot be selected yet. Please choose a real item.
+              Some services are placeholders from our design preview. You can select them for now, but final confirmation will be blocked until they’re mapped to real items. TODO(services): remove when DB is seeded.
             </div>
           )}
           <div className="grid" role="list" aria-label="Service types">
             {rows.map((svc) => {
-              const isActive = String(selected) === String(svc.id);
+              // When fallback, selection key uses name; when real, uses id
+              const key = svc.id ?? `fallback-${svc.name}`;
+              const isActive = String(selected) === String(svc.id || svc.name || "");
               const price = safeNumber(svc.base_price);
               const duration = safeNumber(svc.duration_minutes);
+              const isPlaceholder = !svc.id;
               return (
                 <button
-                  key={svc.id ?? `fallback-${svc.name}`}
+                  key={key}
                   role="listitem"
                   className="card"
                   style={{
@@ -246,18 +275,16 @@ export default function ServiceTypeStep({ onValidChange }) {
                     textAlign: "left",
                     borderColor: isActive ? "#93C5FD" : "var(--border)",
                     background: isActive ? "#F3F4F6" : "var(--surface)",
-                    cursor: svc.id ? "pointer" : "not-allowed",
-                    opacity: svc.id ? 1 : 0.85,
+                    cursor: "pointer",
+                    opacity: 1
                   }}
                   onClick={() => {
-                    if (!svc.id) return; // block fallback selection
-                    setSelected(svc.id);
+                    // Allow fallback by using name as the selection token
+                    setSelected(svc.id || svc.name || "");
                   }}
                   aria-pressed={isActive}
-                  aria-label={`Select ${svc.name || "service type"}${!svc.id ? " (placeholder unavailable)" : ""}`}
-                  disabled={!svc.id}
-                  aria-disabled={!svc.id}
-                  title={!svc.id ? "Placeholder item: choose a real service type" : undefined}
+                  aria-label={`Select ${svc.name || "service type"}${isPlaceholder ? " (placeholder)" : ""}`}
+                  title={isPlaceholder ? "Placeholder item selected. It will be mapped on the Review step if available." : undefined}
                 >
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <strong>{svc.name || "Untitled service"}</strong>
@@ -273,6 +300,11 @@ export default function ServiceTypeStep({ onValidChange }) {
                       {svc.description}
                     </div>
                   ) : null}
+                  {isPlaceholder && (
+                    <div className="subtitle" style={{ marginTop: 6, color: "#92400E" }}>
+                      Placeholder
+                    </div>
+                  )}
                 </button>
               );
             })}

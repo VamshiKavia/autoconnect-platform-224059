@@ -56,6 +56,7 @@ export default function DateTimeStep({ onValidChange }) {
           setLoading(false);
           return;
         }
+        // TODO(services): serviceType may be a placeholder temporarily; skip querying when id is not a UUID.
         if (serviceType?.id && !isUuid(serviceType.id)) {
           setErr("Please choose a real service type to see available slots.");
           setLoading(false);
