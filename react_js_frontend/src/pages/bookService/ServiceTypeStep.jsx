@@ -1,45 +1,40 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBooking } from "./context";
 import getSupabaseClient from "../../lib/supabaseClient";
+import { MOCK_SERVICE_TYPES } from "./mocks";
 
 /**
 // PUBLIC_INTERFACE
- * ServiceTypeStep - Step 2: Choose a service type from Supabase "service_types" (read-only).
- *
- * Reads fields: id, name, description, base_price, duration_minutes, active
- * Displays all services from Supabase with loading/empty/error states.
- * Maintains selection/validation and provides loading/empty/error states.
+ * ServiceTypeStep - Step 2: Choose a service type.
+ * TODO: When REACT_APP_ENABLE_SUPABASE=true, Supabase code path is active.
  */
 export default function ServiceTypeStep({ onValidChange }) {
-  const { serviceType, setServiceType } = useBooking();
+  const { serviceType, setServiceType, flags } = useBooking();
 
-  // Selection state
   const [selected, setSelected] = useState(serviceType?.id || "");
-
-  // Data and status
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(flags?.supabaseEnabled));
   const [err, setErr] = useState("");
 
   const allRowsCacheRef = useRef(null);
   const supabase = getSupabaseClient();
 
-  // Fetch all services from Supabase (no filters to ensure full list)
   const fetchAllServerSide = useCallback(async () => {
     const { data, error } = await supabase
       .from("service_types")
       .select("id, name, description, base_price, duration_minutes, active")
+      .eq("active", true)
       .order("name", { ascending: true });
     if (error) throw error;
     return { data: Array.isArray(data) ? data : [] };
   }, [supabase]);
 
-  // Client-side cache backed fetch
   const fetchAllClientSide = useCallback(async () => {
     if (!allRowsCacheRef.current) {
       const { data, error } = await supabase
         .from("service_types")
         .select("id, name, description, base_price, duration_minutes, active")
+        .eq("active", true)
         .order("name", { ascending: true });
       if (error) throw error;
       allRowsCacheRef.current = Array.isArray(data) ? data : [];
@@ -51,8 +46,15 @@ export default function ServiceTypeStep({ onValidChange }) {
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
       setErr("");
+      // Mock path
+      if (!flags?.supabaseEnabled) {
+        setRows(MOCK_SERVICE_TYPES);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
       try {
         const { data } = await fetchAllServerSide();
         if (cancelled) return;
@@ -78,29 +80,25 @@ export default function ServiceTypeStep({ onValidChange }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchAllServerSide, fetchAllClientSide]);
+  }, [fetchAllServerSide, fetchAllClientSide, flags?.supabaseEnabled]);
 
-  // Map selection to context strictly by Supabase ID
   useEffect(() => {
-    const foundDb = rows.find((s) => s.id && String(s.id) === String(selected)) || null;
-
-    if (foundDb) {
+    const found = rows.find((s) => String(s.id) === String(selected)) || null;
+    if (found) {
       const mapped = {
-        id: foundDb.id,
-        name: foundDb.name || "",
-        description: foundDb.description || "",
-        price: safeNumber(foundDb.base_price),
-        duration_min: safeNumber(foundDb.duration_minutes),
-        active: !!foundDb.active,
-        base_price: foundDb.base_price,
-        duration_minutes: foundDb.duration_minutes,
+        id: found.id,
+        name: found.name || "",
+        description: found.description || "",
+        price: Number(found.base_price ?? found.price ?? 0),
+        duration_min: Number(found.duration_minutes ?? found.duration_minutes ?? found.duration_min ?? 0),
+        active: found.active != null ? !!found.active : true,
+        base_price: found.base_price,
+        duration_minutes: found.duration_minutes,
       };
       setServiceType(mapped);
       onValidChange?.(true);
       return;
     }
-
-    // Nothing selected or invalid selection
     setServiceType(null);
     onValidChange?.(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,8 +141,8 @@ export default function ServiceTypeStep({ onValidChange }) {
           {rows.map((svc) => {
             const key = svc.id;
             const isActive = String(selected) === String(svc.id || "");
-            const price = safeNumber(svc.base_price);
-            const duration = safeNumber(svc.duration_minutes);
+            const price = Number(svc.base_price ?? svc.price ?? 0);
+            const duration = Number(svc.duration_minutes ?? svc.duration_min ?? 0);
             return (
               <button
                 key={key}
@@ -156,7 +154,6 @@ export default function ServiceTypeStep({ onValidChange }) {
                   borderColor: isActive ? "#93C5FD" : "var(--border)",
                   background: isActive ? "#F3F4F6" : "var(--surface)",
                   cursor: "pointer",
-                  opacity: 1
                 }}
                 onClick={() => setSelected(svc.id)}
                 aria-pressed={isActive}
@@ -181,11 +178,12 @@ export default function ServiceTypeStep({ onValidChange }) {
           })}
         </div>
       )}
+
+      {!flags?.supabaseEnabled && (
+        <p className="subtitle" style={{ marginTop: 8 }}>
+          TODO: Supabase disabled. Showing mock services. Set REACT_APP_ENABLE_SUPABASE=true to re-enable.
+        </p>
+      )}
     </section>
   );
-}
-
-function safeNumber(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
 }

@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { BOOKING_STEPS, useBooking } from "./context";
 import getSupabaseClient from "../../lib/supabaseClient";
+import { generateMockBookingReference } from "./mocks";
 
 /**
 // PUBLIC_INTERFACE
- * ReviewStep - Step 6: Summarize selections and allow confirmation with polished UI.
- * No changes to Supabase setup; relies on existing configuration.
+ * ReviewStep - Step 6: Summarize selections and allow confirmation.
+ * TODO: When REACT_APP_ENABLE_SUPABASE=true, Supabase insert is active.
  */
 export default function ReviewStep({ canSubmit }) {
-  const { vehicle, serviceType, center, dateTime, details } = useBooking();
+  const { vehicle, serviceType, center, dateTime, details, flags } = useBooking();
   const supabase = getSupabaseClient();
 
   const [submitting, setSubmitting] = useState(false);
@@ -17,12 +18,12 @@ export default function ReviewStep({ canSubmit }) {
 
   const requiredReady = useMemo(() => {
     const hasVehicle = !!(vehicle && (vehicle.make || vehicle.model));
-    const hasServiceType = !!serviceType?.id && isUuid(serviceType.id);
-    const hasCenter = !!center?.id && isUuid(center.id);
-    const hasSlot = !!dateTime?.slotMeta?.id && isUuid(dateTime.slotMeta.id);
+    const hasServiceType = !!serviceType?.id;
+    const hasCenter = !!center?.id;
+    const hasSlot = !!dateTime?.slotMeta?.id || !!dateTime?.slot; // allow mock id/label
     const hasDetails = !!(details?.name && details?.phone && details?.email);
     return hasVehicle && hasServiceType && hasCenter && hasSlot && hasDetails;
-  }, [vehicle, serviceType, center?.id, dateTime?.slotMeta?.id, details?.name, details?.phone, details?.email]);
+  }, [vehicle, serviceType, center?.id, dateTime?.slotMeta?.id, dateTime?.slot, details?.name, details?.phone, details?.email]);
 
   const disabled = !(canSubmit && requiredReady) || submitting;
 
@@ -33,6 +34,16 @@ export default function ReviewStep({ canSubmit }) {
     setSubmitting(true);
     setErrorMsg("");
     try {
+      // Mock path: simulate success
+      if (!flags?.supabaseEnabled) {
+        const mockId = generateMockBookingReference();
+        setTimeout(() => {
+          setSuccess({ id: mockId, _note: "Supabase disabled: booking not persisted. This is a mock confirmation." });
+          setSubmitting(false);
+        }, 400);
+        return;
+      }
+
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       const userId = authData?.user?.id;
@@ -40,21 +51,9 @@ export default function ReviewStep({ canSubmit }) {
         throw new Error("You must be signed in to confirm a booking.");
       }
 
-      // Validate UUIDs before building payload
-      if (!isUuid(serviceType?.id)) {
-        throw new Error("Selected service type is invalid. Please choose a valid service type.");
-      }
-      if (!isUuid(center?.id)) {
-        throw new Error("Selected service center is invalid. Please choose a valid service center.");
-      }
-      if (!isUuid(dateTime?.slotMeta?.id)) {
-        throw new Error("Selected time slot is invalid. Please choose a valid slot.");
-      }
-      const vehicleId = vehicle?.id && isUuid(vehicle.id) ? vehicle.id : null;
-
       const payload = {
         user_id: userId,
-        vehicle_id: vehicleId,
+        vehicle_id: vehicle?.id || null, // May be null if manually entered
         service_type_id: serviceType.id,
         service_center_id: center?.id,
         slot_id: dateTime?.slotMeta?.id,
@@ -94,6 +93,11 @@ export default function ReviewStep({ canSubmit }) {
           Your booking has been created successfully. Reference:
           <strong> #{String(success.id)}</strong>
         </p>
+        {!flags?.supabaseEnabled && (
+          <p className="subtitle" style={{ marginTop: 8 }}>
+            Note: Supabase is currently disabled. This confirmation is not persisted to the database.
+          </p>
+        )}
         <div className="card" style={{ background: "var(--background)" }}>
           <div className="label">Summary</div>
           <ul style={{ marginTop: 6 }}>
@@ -104,9 +108,6 @@ export default function ReviewStep({ canSubmit }) {
           </ul>
         </div>
         <div className="subtitle" style={{ marginTop: 12 }}>
-          We’ve sent a confirmation to {details?.email}. We’ll contact you at {details?.phone} if needed.
-        </div>
-        <div className="subtitle" style={{ marginTop: 8 }}>
           Steps: {BOOKING_STEPS.join(" → ")}
         </div>
       </section>
@@ -205,15 +206,9 @@ function isFiniteNumber(v) {
 }
 function validatePayload(p) {
   if (!p.user_id) throw new Error("Not signed in.");
-  if (!p.service_type_id || !isUuid(p.service_type_id)) throw new Error("Service type is missing or invalid.");
-  if (!p.service_center_id || !isUuid(p.service_center_id)) throw new Error("Service center is missing or invalid.");
-  if (!p.slot_id || !isUuid(p.slot_id)) throw new Error("Time slot is missing or invalid.");
-  if (!p.contact_name || !p.contact_phone || !p.contact_email) {
-    throw new Error("Contact details are incomplete.");
-  }
-}
-function isUuid(v) {
-  return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+  if (!p.service_type_id) throw new Error("Service type is missing.");
+  if (!p.service_center_id) throw new Error("Service center is missing.");
+  if (!p.slot_id) throw new Error("Time slot is missing.");
 }
 function SummaryCard({ title, index, children }) {
   return (

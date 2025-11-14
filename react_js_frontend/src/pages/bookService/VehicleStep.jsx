@@ -2,16 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useBooking } from "./context";
 import getSupabaseClient from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
+import { MOCK_VEHICLES } from "./mocks";
 
 /**
 // PUBLIC_INTERFACE
  * VehicleStep - Step 1: Select/enter vehicle details with Ocean Professional UI.
- * Uses Supabase user_vehicles read-only list. No data logic changed.
- *
- * TODO: Extract FormField and CardList components.
+ * TODO: When REACT_APP_ENABLE_SUPABASE=true, Supabase code path is active.
  */
 export default function VehicleStep({ onValidChange }) {
-  const { vehicle, setVehicle } = useBooking();
+  const { vehicle, setVehicle, flags } = useBooking();
   const { user } = useAuth();
   const supabase = getSupabaseClient();
 
@@ -28,7 +27,7 @@ export default function VehicleStep({ onValidChange }) {
   );
   const [touched, setTouched] = useState(false);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(flags?.supabaseEnabled));
   const [listError, setListError] = useState("");
   const [vehicles, setVehicles] = useState([]);
 
@@ -36,8 +35,15 @@ export default function VehicleStep({ onValidChange }) {
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
       setListError("");
+      // Mock path when Supabase disabled
+      if (!flags?.supabaseEnabled) {
+        setVehicles(MOCK_VEHICLES);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
       try {
         let userId = user?.id || null;
         if (!userId) {
@@ -69,9 +75,11 @@ export default function VehicleStep({ onValidChange }) {
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.id]);
+  }, [supabase, user?.id, flags?.supabaseEnabled]);
 
   useEffect(() => {
     const next = {
@@ -109,7 +117,6 @@ export default function VehicleStep({ onValidChange }) {
       <h3 id="vehicle-step-title" className="section-title">Select Vehicle</h3>
       <p className="subtitle">Choose a saved vehicle or enter your vehicle details. VIN is optional.</p>
 
-      {/* Saved vehicles list */}
       <section aria-label="Saved vehicles">
         {loading && <div className="card" style={{ background: "var(--background)" }}>Loading your vehicles...</div>}
         {listError && (
@@ -157,7 +164,6 @@ export default function VehicleStep({ onValidChange }) {
         )}
       </section>
 
-      {/* Manual form */}
       <div className="row" style={{ flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 240px", minWidth: 240 }}>
           <label className="label" htmlFor="vehicle-make">Make</label>
@@ -211,6 +217,12 @@ export default function VehicleStep({ onValidChange }) {
           />
         </div>
       </div>
+
+      {!flags?.supabaseEnabled && (
+        <p className="subtitle" style={{ marginTop: 8 }}>
+          TODO: Supabase disabled. Showing mock vehicles. Set REACT_APP_ENABLE_SUPABASE=true to re-enable.
+        </p>
+      )}
     </section>
   );
 }

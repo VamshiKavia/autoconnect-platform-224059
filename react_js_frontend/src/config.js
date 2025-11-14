@@ -1,8 +1,10 @@
 //
-// Runtime configuration for the React app.
-// Do not hardcode secrets; read via process.env.* prefixed with REACT_APP_.
+/**
+ * Runtime configuration helpers for the React app.
+ * Do not hardcode secrets; read via process.env.* prefixed with REACT_APP_.
+ * Booking Supabase enablement is handled via utils/featureFlags.js
+ */
 //
-
 // PUBLIC_INTERFACE
 export function getFeatureFlags() {
   /** Returns feature flags as a normalized object from REACT_APP_FEATURE_FLAGS. */

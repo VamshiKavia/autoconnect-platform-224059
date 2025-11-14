@@ -1,37 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useBooking } from "./context";
 import getSupabaseClient from "../../lib/supabaseClient";
+import { MOCK_CENTERS } from "./mocks";
 
 /**
 // PUBLIC_INTERFACE
  * CenterStep - Step 3: Choose a service center.
- *
- * Behavior:
- * - Reads active centers from Supabase: service_centers table.
- * - Surfaces key fields: name, address (line1/line2, city, state, postal_code),
- *   phone, email, opening_hours, and a distance placeholder/estimate when possible.
- * - Preserves existing selection flow, validation, and Ocean Professional styling.
+ * TODO: When REACT_APP_ENABLE_SUPABASE=true, Supabase code path is active.
  */
 export default function CenterStep({ onValidChange }) {
-  const { center, setCenter } = useBooking();
+  const { center, setCenter, flags } = useBooking();
 
-  // Selection state
   const [selected, setSelected] = useState(center?.id || "");
-
-  // Data and status
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(flags?.supabaseEnabled));
   const [err, setErr] = useState("");
 
-  // Geolocation for distance placeholder (optional)
   const [geo, setGeo] = useState({ lat: null, lng: null, ready: false, denied: false });
-
-  // Local cache for client-side retry without re-querying network
   const dbRowsCacheRef = useRef(null);
-
   const supabase = getSupabaseClient();
 
-  // Fetch all active centers from Supabase
   async function fetchCentersServer() {
     const { data, error } = await supabase
       .from("service_centers")
@@ -44,7 +32,6 @@ export default function CenterStep({ onValidChange }) {
     return Array.isArray(data) ? data : [];
   }
 
-  // Client-side cached fetch (retry path)
   async function fetchCentersCached() {
     if (!dbRowsCacheRef.current) {
       const { data, error } = await supabase
@@ -64,14 +51,19 @@ export default function CenterStep({ onValidChange }) {
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
       setErr("");
+      if (!flags?.supabaseEnabled) {
+        setRows(MOCK_CENTERS.map((c) => ({ ...c, address: `${c.address}, ${c.city}` })));
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
       try {
         const dbRows = await fetchCentersServer();
         if (cancelled) return;
         const mapped = dbRows.map(mapCenterRecord);
         setRows(mapped);
-        // Maintain selection validity
         if (selected && !mapped.find((x) => String(x.id) === String(selected))) {
           setSelected("");
         }
@@ -100,9 +92,8 @@ export default function CenterStep({ onValidChange }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [flags?.supabaseEnabled]);
 
-  // Geolocation optional
   useEffect(() => {
     if (!("geolocation" in navigator)) {
       setGeo((g) => ({ ...g, ready: true }));
@@ -120,7 +111,6 @@ export default function CenterStep({ onValidChange }) {
     );
   }, []);
 
-  // Map selection to booking context and notify validity
   useEffect(() => {
     const byId = rows.find((c) => c.id && String(c.id) === String(selected)) || null;
     setCenter(byId || null);
@@ -157,7 +147,7 @@ export default function CenterStep({ onValidChange }) {
         <div className="grid" role="list" aria-label="Service centers">
           {rows.map((c) => {
             const active = String(selected) === String(c.id);
-            const address = formatAddress(c);
+            const address = c.address || formatAddress(c);
             const distanceKm = geo.ready ? computeDistanceKm(geo.lat, geo.lng, c.latitude, c.longitude) : null;
 
             return (
@@ -176,7 +166,6 @@ export default function CenterStep({ onValidChange }) {
                     <strong>{c.name || "Unnamed center"}</strong>
                     <div className="subtitle" style={{ marginTop: 4 }}>{address || "—"}</div>
 
-                    {/* Distance placeholder */}
                     <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
                       {distanceKm != null && isFinite(distanceKm)
                         ? `${distanceKm.toFixed(1)} km away`
@@ -185,7 +174,6 @@ export default function CenterStep({ onValidChange }) {
                         : "Distance unavailable"}
                     </div>
 
-                    {/* Contact + hours */}
                     {(c.phone || c.email) && (
                       <div className="subtitle" style={{ marginTop: 6 }}>
                         {c.phone ? `☎ ${c.phone}` : ""} {c.phone && c.email ? "• " : ""} {c.email ? c.email : ""}
@@ -211,6 +199,12 @@ export default function CenterStep({ onValidChange }) {
             );
           })}
         </div>
+      )}
+
+      {!flags?.supabaseEnabled && (
+        <p className="subtitle" style={{ marginTop: 8 }}>
+          TODO: Supabase disabled. Showing mock centers. Set REACT_APP_ENABLE_SUPABASE=true to re-enable.
+        </p>
       )}
     </section>
   );

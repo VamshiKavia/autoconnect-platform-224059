@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useBooking } from "./context";
 import getSupabaseClient from "../../lib/supabaseClient";
+import { MOCK_TIMESLOTS } from "./mocks";
 
 /**
 // PUBLIC_INTERFACE
  * DateTimeStep - Step 4: Pick Date and Time slot with Ocean styling.
- * Uses Supabase service_center_slots reading logic. No route/logic changes.
+ * TODO: When REACT_APP_ENABLE_SUPABASE=true, Supabase code path is active.
  */
 export default function DateTimeStep({ onValidChange }) {
-  const { dateTime, setDateTime, center, serviceType } = useBooking();
+  const { dateTime, setDateTime, center, serviceType, flags } = useBooking();
 
   const [date, setDate] = useState(dateTime?.date || "");
   const [selectedSlotId, setSelectedSlotId] = useState(dateTime?.slotMeta?.id || "");
@@ -42,28 +43,24 @@ export default function DateTimeStep({ onValidChange }) {
     async function load() {
       setErr("");
       setRows([]);
+
+      if (!date || !center?.id) {
+        setLoading(false);
+        return;
+      }
+
+      // Mock path: provide simple time slots
+      if (!flags?.supabaseEnabled) {
+        setLoading(false);
+        // derive mock slots for any date
+        const normalized = MOCK_TIMESLOTS.map((t) => ({ id: t.id, label: t.label }));
+        setRows(normalized);
+        return;
+      }
+
       setLoading(true);
-
       try {
-        if (!date || !center?.id) {
-          setLoading(false);
-          return;
-        }
-
-        // Guard: require UUIDs for center and optional serviceType before querying
-        if (!isUuid(center.id)) {
-          setErr("Please choose a valid service center to see available slots.");
-          setLoading(false);
-          return;
-        }
-        if (serviceType?.id && !isUuid(serviceType.id)) {
-          setErr("Please choose a valid service type to see available slots.");
-          setLoading(false);
-          return;
-        }
-
         const supabase = getSupabaseClient();
-
         const { start, end } = dayBounds || {};
         if (!start || !end) { setLoading(false); return; }
 
@@ -124,32 +121,29 @@ export default function DateTimeStep({ onValidChange }) {
     load();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, center?.id, serviceType?.id]);
+  }, [date, center?.id, serviceType?.id, flags?.supabaseEnabled]);
 
   useEffect(() => {
     const selected = rows.find((r) => String(r.id) === String(selectedSlotId)) || null;
-    const slotLabel = selected ? formatRange(selected.start_at, selected.end_at, timeFmt) : "";
+    const slotLabel = selected
+      ? selected.label || formatRange(selected.start_at, selected.end_at, timeFmt)
+      : "";
 
     setDateTime({
       date: date || "",
       slot: slotLabel,
-      slotMeta: selected ? { id: selected.id, start_at: selected.start_at, end_at: selected.end_at } : null,
+      slotMeta: selected
+        ? { id: selected.id, start_at: selected.start_at, end_at: selected.end_at, label: selected.label }
+        : null,
     });
 
-    onValidChange?.(isValid(date, selected));
+    const valid = Boolean(date && selected);
+    onValidChange?.(valid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, selectedSlotId, rows]);
 
   const empty = useMemo(() => !loading && !err && date && rows.length === 0, [loading, err, rows, date]);
 
-  function isValid(d, selected) {
-    if (!d || !selected) return false;
-    const nowStr = todayStr();
-    return d >= nowStr;
-  }
-  function isUuid(v) {
-    return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-  }
   function todayStr() {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -222,10 +216,12 @@ export default function DateTimeStep({ onValidChange }) {
           <div className="label">Available time slots</div>
           <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
             {rows.map((r) => {
-              const s = new Date(r.start_at);
-              const e = new Date(r.end_at);
-              const label = `${timeFmt.format(s)} - ${timeFmt.format(e)}`;
-              const isPast = s.getTime() < Date.now();
+              const label = r.label || (() => {
+                const s = new Date(r.start_at);
+                const e = new Date(r.end_at);
+                return `${timeFmt.format(s)} - ${timeFmt.format(e)}`;
+              })();
+              const isPast = r.start_at ? new Date(r.start_at).getTime() < Date.now() : false;
               const active = String(selectedSlotId) === String(r.id);
 
               return (
@@ -251,6 +247,12 @@ export default function DateTimeStep({ onValidChange }) {
             })}
           </div>
         </div>
+      )}
+
+      {!flags?.supabaseEnabled && (
+        <p className="subtitle" style={{ marginTop: 8 }}>
+          TODO: Supabase disabled. Showing mock time slots. Set REACT_APP_ENABLE_SUPABASE=true to re-enable.
+        </p>
       )}
     </section>
   );
