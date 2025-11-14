@@ -52,13 +52,12 @@ export default function DateTimeStep({ onValidChange }) {
 
         // Guard: require UUIDs for center and optional serviceType before querying
         if (!isUuid(center.id)) {
-          setErr("Please choose a real service center to see available slots.");
+          setErr("Please choose a valid service center to see available slots.");
           setLoading(false);
           return;
         }
-        // TODO(services): serviceType may be a placeholder temporarily; skip querying when id is not a UUID.
         if (serviceType?.id && !isUuid(serviceType.id)) {
-          setErr("Please choose a real service type to see available slots.");
+          setErr("Please choose a valid service type to see available slots.");
           setLoading(false);
           return;
         }
@@ -210,24 +209,6 @@ export default function DateTimeStep({ onValidChange }) {
           role="alert"
         >
           {err}
-        </div>
-      )}
-      {date && (!center?.id || (center?.id && !isUuid(center.id))) && (
-        <div
-          className="card"
-          style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginTop: 12 }}
-          role="status"
-        >
-          Please choose a real service center (not a placeholder) to continue.
-        </div>
-      )}
-      {date && serviceType?.id && !isUuid(serviceType.id) && (
-        <div
-          className="card"
-          style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginTop: 12 }}
-          role="status"
-        >
-          Please choose a real service type to filter available slots.
         </div>
       )}
       {date && empty && (

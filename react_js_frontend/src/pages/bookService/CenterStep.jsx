@@ -8,14 +8,9 @@ import getSupabaseClient from "../../lib/supabaseClient";
  *
  * Behavior:
  * - Reads active centers from Supabase: service_centers table.
- * - Merges with a temporary client-side fallback list so all centers from the design
- *   appear immediately while DB seeding completes.
  * - Surfaces key fields: name, address (line1/line2, city, state, postal_code),
  *   phone, email, opening_hours, and a distance placeholder/estimate when possible.
  * - Preserves existing selection flow, validation, and Ocean Professional styling.
- *
- * TODO(centers): Remove the fallback list once Supabase is fully seeded.
- * TODO: Extract CardList component for reuse across steps.
  */
 export default function CenterStep({ onValidChange }) {
   const { center, setCenter } = useBooking();
@@ -35,64 +30,6 @@ export default function CenterStep({ onValidChange }) {
   const dbRowsCacheRef = useRef(null);
 
   const supabase = getSupabaseClient();
-
-  // --- Temporary client-side fallback centers (from attached image/reference) ---
-  // These are used only until the database is fully populated.
-  // NOTE: Only non-sensitive public info is included here.
-  // TODO(centers): Delete this const once DB has these rows.
-  const fallbackCenters = useMemo(
-    () => [
-      {
-        id: "fallback-om-downtown",
-        name: "Ocean Motors Service - Downtown",
-        address_line1: "15 Bull Temple Rd",
-        address_line2: "Basavanagudi",
-        city: "Bengaluru",
-        state: "KA",
-        postal_code: "560004",
-        country: "IN",
-        phone: "+91 80 4000 1000",
-        email: "downtown@oceanmotors.example",
-        opening_hours: "Mon–Sat 9:00–18:00",
-        latitude: null,
-        longitude: null,
-        active: true,
-      },
-      {
-        id: "fallback-om-kanakapura",
-        name: "Ocean Motors Service - Kanakapura Rd",
-        address_line1: "Opp. Metro Cash & Carry",
-        address_line2: "Kanakapura Main Rd",
-        city: "Bengaluru",
-        state: "KA",
-        postal_code: "560062",
-        country: "IN",
-        phone: "+91 80 4000 2000",
-        email: "kanakapura@oceanmotors.example",
-        opening_hours: "Mon–Sat 9:00–18:00",
-        latitude: null,
-        longitude: null,
-        active: true,
-      },
-      {
-        id: "fallback-om-bannerghatta",
-        name: "Ocean Motors Service - Bannerghatta",
-        address_line1: "Bannerghatta Rd",
-        address_line2: "Mico Layout",
-        city: "Bengaluru",
-        state: "KA",
-        postal_code: "560076",
-        country: "IN",
-        phone: "+91 80 4000 3000",
-        email: "bannerghatta@oceanmotors.example",
-        opening_hours: "Mon–Sat 9:00–18:00",
-        latitude: null,
-        longitude: null,
-        active: true,
-      },
-    ],
-    []
-  );
 
   // Fetch all active centers from Supabase
   async function fetchCentersServer() {
@@ -123,30 +60,6 @@ export default function CenterStep({ onValidChange }) {
     return dbRowsCacheRef.current;
   }
 
-  // Merge DB centers with fallback by name (case-insensitive), keeping DB record when duplicate.
-  // Fallback items will be marked with id=null and isFallback=true to avoid misuse in Supabase queries.
-  function mergeCenters(dbRows) {
-    const norm = (s) => (s || "").toString().trim().toLowerCase();
-    const byName = new Map();
-    // Put DB rows first to make them authoritative
-    for (const r of dbRows) {
-      byName.set(norm(r.name), { ...r, isFallback: false });
-    }
-    // Add fallback items if not present by name
-    for (const f of fallbackCenters) {
-      const key = norm(f.name);
-      if (!byName.has(key)) {
-        byName.set(key, {
-          ...f,
-          id: null, // critical: never carry string fallback id into context
-          isFallback: true,
-        });
-      }
-    }
-    // Return array sorted by name for predictability
-    return Array.from(byName.values()).sort((a, b) => norm(a.name).localeCompare(norm(b.name)));
-  }
-
   useEffect(() => {
     let cancelled = false;
 
@@ -156,26 +69,24 @@ export default function CenterStep({ onValidChange }) {
       try {
         const dbRows = await fetchCentersServer();
         if (cancelled) return;
-        const merged = mergeCenters(dbRows).map(mapCenterRecord);
-        setRows(merged);
+        const mapped = dbRows.map(mapCenterRecord);
+        setRows(mapped);
         // Maintain selection validity
-        if (selected && !merged.find((x) => String(x.id) === String(selected))) {
+        if (selected && !mapped.find((x) => String(x.id) === String(selected))) {
           setSelected("");
         }
       } catch (e) {
         try {
           const dbRows = await fetchCentersCached();
           if (cancelled) return;
-          const merged = mergeCenters(dbRows).map(mapCenterRecord);
-          setRows(merged);
-          if (selected && !merged.find((x) => String(x.id) === String(selected))) {
+          const mapped = dbRows.map(mapCenterRecord);
+          setRows(mapped);
+          if (selected && !mapped.find((x) => String(x.id) === String(selected))) {
             setSelected("");
           }
         } catch (e2) {
           if (!cancelled) {
-            // Even if DB fails, show the fallback so UI isn't empty
-            const merged = mergeCenters([]).map(mapCenterRecord);
-            setRows(merged);
+            setRows([]);
             setErr(e2?.message || e?.message || "Failed to load service centers.");
           }
         }
@@ -209,7 +120,7 @@ export default function CenterStep({ onValidChange }) {
     );
   }, []);
 
-  // Map selection to booking context and notify validity with fallback guard
+  // Map selection to booking context and notify validity
   useEffect(() => {
     const byId = rows.find((c) => c.id && String(c.id) === String(selected)) || null;
     setCenter(byId || null);
@@ -243,82 +154,62 @@ export default function CenterStep({ onValidChange }) {
       )}
 
       {!loading && !err && rows.length > 0 && (
-        <div>
-          {rows.some((r) => !r.id) && (
-            <div
-              className="card"
-              style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginBottom: 8 }}
-              role="status"
-            >
-              Some centers are shown as placeholders while we finish setup. Please select a center without the “Unavailable” badge.
-            </div>
-          )}
-          <div className="grid" role="list" aria-label="Service centers">
-            {rows.map((c) => {
-              const active = String(selected) === String(c.id);
-              const address = formatAddress(c);
-              const distanceKm = geo.ready ? computeDistanceKm(geo.lat, geo.lng, c.latitude, c.longitude) : null;
+        <div className="grid" role="list" aria-label="Service centers">
+          {rows.map((c) => {
+            const active = String(selected) === String(c.id);
+            const address = formatAddress(c);
+            const distanceKm = geo.ready ? computeDistanceKm(geo.lat, geo.lng, c.latitude, c.longitude) : null;
 
-              return (
-                <article
-                  key={c.id ?? `fallback-${c.name}`}
-                  role="listitem"
-                  className="card"
-                  style={{
-                    gridColumn: "span 6",
-                    borderColor: active ? "#93C5FD" : "var(--border)",
-                    background: active ? "#F3F4F6" : "var(--surface)",
-                  }}
-                >
-                  <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div>
-                      <strong>{c.name || "Unnamed center"}</strong>
-                      <div className="subtitle" style={{ marginTop: 4 }}>{address || "—"}</div>
+            return (
+              <article
+                key={c.id}
+                role="listitem"
+                className="card"
+                style={{
+                  gridColumn: "span 6",
+                  borderColor: active ? "#93C5FD" : "var(--border)",
+                  background: active ? "#F3F4F6" : "var(--surface)",
+                }}
+              >
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <strong>{c.name || "Unnamed center"}</strong>
+                    <div className="subtitle" style={{ marginTop: 4 }}>{address || "—"}</div>
 
-                      {/* Distance placeholder */}
-                      <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-                        {distanceKm != null && isFinite(distanceKm)
-                          ? `${distanceKm.toFixed(1)} km away`
-                          : geo.denied
-                          ? "Location access denied"
-                          : "Distance unavailable"}
+                    {/* Distance placeholder */}
+                    <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
+                      {distanceKm != null && isFinite(distanceKm)
+                        ? `${distanceKm.toFixed(1)} km away`
+                        : geo.denied
+                        ? "Location access denied"
+                        : "Distance unavailable"}
+                    </div>
+
+                    {/* Contact + hours */}
+                    {(c.phone || c.email) && (
+                      <div className="subtitle" style={{ marginTop: 6 }}>
+                        {c.phone ? `☎ ${c.phone}` : ""} {c.phone && c.email ? "• " : ""} {c.email ? c.email : ""}
                       </div>
-
-                      {/* Contact + hours */}
-                      {(c.phone || c.email) && (
-                        <div className="subtitle" style={{ marginTop: 6 }}>
-                          {c.phone ? `☎ ${c.phone}` : ""} {c.phone && c.email ? "• " : ""} {c.email ? c.email : ""}
-                        </div>
-                      )}
-                      {c.opening_hours ? (
-                        <div className="subtitle" style={{ marginTop: 4 }}>
-                          Hours: {c.opening_hours}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div>
-                      <button
-                        className="btn"
-                        onClick={() => {
-                          if (!c.id) {
-                            // Fallback item: do not allow selecting
-                            return;
-                          }
-                          setSelected(c.id);
-                        }}
-                        aria-label={`Select ${c.name}${!c.id ? " (unavailable placeholder)" : ""}`}
-                        disabled={!c.id}
-                        aria-disabled={!c.id}
-                        title={!c.id ? "This is a placeholder center. Please choose a real center." : undefined}
-                      >
-                        {!c.id ? "Unavailable" : active ? "Selected" : "Select"}
-                      </button>
-                    </div>
+                    )}
+                    {c.opening_hours ? (
+                      <div className="subtitle" style={{ marginTop: 4 }}>
+                        Hours: {c.opening_hours}
+                      </div>
+                    ) : null}
                   </div>
-                </article>
-              );
-            })}
-          </div>
+                  <div>
+                    <button
+                      className="btn"
+                      onClick={() => setSelected(c.id)}
+                      aria-label={`Select ${c.name}`}
+                    >
+                      {active ? "Selected" : "Select"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
@@ -327,11 +218,8 @@ export default function CenterStep({ onValidChange }) {
 
 /** Mapper and helpers */
 function mapCenterRecord(row) {
-  // If row came from fallback, enforce id=null and mark isFallback true
-  const isFallback = !!row.isFallback || (typeof row.id === "string" && String(row.id).startsWith("fallback-"));
   return {
-    id: isFallback ? null : row.id,
-    isFallback,
+    id: row.id,
     name: row.name || "",
     address_line1: row.address_line1 || "",
     address_line2: row.address_line2 || "",

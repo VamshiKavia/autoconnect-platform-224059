@@ -14,71 +14,15 @@ export default function ReviewStep({ canSubmit }) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [success, setSuccess] = useState(null);
-  const [mappingNote, setMappingNote] = useState(""); // inline guidance for placeholders
-  const [mappedServiceType, setMappedServiceType] = useState(serviceType || null);
-
-  // Best-effort mapping: if selected service is a fallback (id null) but name exists,
-  // try to find exact match in Supabase and replace in-memory selection.
-  // TODO(services): Remove entire mapping block once DB is seeded.
-  useMemo(() => {
-    let cancelled = false;
-
-    async function tryMapByName() {
-      setMappingNote("");
-      setMappedServiceType(serviceType || null);
-      if (!serviceType?.isFallback || !serviceType?.name) {
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from("service_types")
-          .select("id, name, description, base_price, duration_minutes, active")
-          .eq("name", serviceType.name)
-          .maybeSingle();
-        if (error) throw error;
-
-        if (data?.id && isUuid(data.id)) {
-          // Replace in-memory for review only
-          setMappedServiceType({
-            id: data.id,
-            name: data.name || serviceType.name,
-            description: data.description || serviceType.description || "",
-            price: isFiniteNumber(data.base_price) ? Number(data.base_price) : serviceType.price || null,
-            duration_min: isFiniteNumber(data.duration_minutes) ? Number(data.duration_minutes) : serviceType.duration_min || null,
-            active: !!data.active,
-            base_price: data.base_price,
-            duration_minutes: data.duration_minutes,
-            isFallback: false,
-          });
-          setMappingNote(""); // mapping succeeded
-        } else {
-          setMappingNote(
-            "This service is a placeholder and isn't connected to the database yet. Please choose a real service or contact support."
-          );
-        }
-      } catch {
-        setMappingNote(
-          "This service is a placeholder and isn't connected to the database yet. Please choose a real service or contact support."
-        );
-      }
-    }
-
-    tryMapByName();
-
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceType?.id, serviceType?.name, serviceType?.isFallback]);
 
   const requiredReady = useMemo(() => {
     const hasVehicle = !!(vehicle && (vehicle.make || vehicle.model));
-    const st = mappedServiceType || serviceType;
-    const hasServiceType = !!st?.id && isUuid(st.id);
+    const hasServiceType = !!serviceType?.id && isUuid(serviceType.id);
     const hasCenter = !!center?.id && isUuid(center.id);
     const hasSlot = !!dateTime?.slotMeta?.id && isUuid(dateTime.slotMeta.id);
     const hasDetails = !!(details?.name && details?.phone && details?.email);
     return hasVehicle && hasServiceType && hasCenter && hasSlot && hasDetails;
-  }, [vehicle, mappedServiceType, serviceType, center?.id, dateTime?.slotMeta?.id, details?.name, details?.phone, details?.email]);
+  }, [vehicle, serviceType, center?.id, dateTime?.slotMeta?.id, details?.name, details?.phone, details?.email]);
 
   const disabled = !(canSubmit && requiredReady) || submitting;
 
@@ -98,25 +42,20 @@ export default function ReviewStep({ canSubmit }) {
 
       // Validate UUIDs before building payload
       if (!isUuid(serviceType?.id)) {
-        throw new Error("Selected service type is a placeholder. Please choose a real service type.");
+        throw new Error("Selected service type is invalid. Please choose a valid service type.");
       }
       if (!isUuid(center?.id)) {
-        throw new Error("Selected service center is a placeholder. Please choose a real service center.");
+        throw new Error("Selected service center is invalid. Please choose a valid service center.");
       }
       if (!isUuid(dateTime?.slotMeta?.id)) {
-        throw new Error("Selected time slot is invalid. Please choose a real slot.");
+        throw new Error("Selected time slot is invalid. Please choose a valid slot.");
       }
       const vehicleId = vehicle?.id && isUuid(vehicle.id) ? vehicle.id : null;
-
-      const st = mappedServiceType || serviceType;
-      if (!st?.id || !isUuid(st.id)) {
-        throw new Error("This service is a placeholder and isn't connected to the database yet. Please choose a real service or contact support.");
-      }
 
       const payload = {
         user_id: userId,
         vehicle_id: vehicleId,
-        service_type_id: st.id,
+        service_type_id: serviceType.id,
         service_center_id: center?.id,
         slot_id: dateTime?.slotMeta?.id,
         contact_name: details?.name || "",
@@ -124,8 +63,8 @@ export default function ReviewStep({ canSubmit }) {
         contact_email: details?.email || "",
         pickup_drop: !!details?.pickup,
         notes: details?.notes || "",
-        estimated_price: isFiniteNumber(st?.price) ? Number(st.price) : null,
-        estimated_duration_minutes: isFiniteNumber(st?.duration_min) ? Number(st.duration_min) : null,
+        estimated_price: isFiniteNumber(serviceType?.price) ? Number(serviceType.price) : null,
+        estimated_duration_minutes: isFiniteNumber(serviceType?.duration_min) ? Number(serviceType.duration_min) : null,
         status: "pending",
       };
 
@@ -180,42 +119,27 @@ export default function ReviewStep({ canSubmit }) {
       <p className="subtitle">Verify your details before submitting.</p>
 
       <div className="grid" role="list" aria-label="Booking summary">
-        {/* TODO(services): Remove placeholder warning once DB seeding is complete */}
-        {mappingNote && (
-          <div
-            className="card"
-            style={{ gridColumn: "span 12", background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E" }}
-            role="status"
-          >
-            {mappingNote}
-          </div>
-        )}
         <SummaryCard title="Vehicle" index={0}>
           <div>{(vehicle?.make || "-")} {(vehicle?.model || "")}</div>
           <div className="subtitle">VIN: {vehicle?.vin || "-"}</div>
         </SummaryCard>
 
         <SummaryCard title="Service Type" index={1}>
-          {(() => {
-            const st = mappedServiceType || serviceType;
-            return (
+          <>
+            <div>{serviceType?.name || "-"}</div>
+            {serviceType && (
               <>
-                <div>{st?.name || "-"}</div>
-                {st && (
-                  <>
-                    <div className="subtitle">
-                      {isFiniteNumber(st.price) ? `$${Number(st.price).toLocaleString()}` : "—"} • {isFiniteNumber(st.duration_min) ? `${st.duration_min} min` : "—"}
-                    </div>
-                    {st.note ? (
-                      <div className="subtitle" style={{ marginTop: 4 }}>
-                        {st.note}
-                      </div>
-                    ) : null}
-                  </>
-                )}
+                <div className="subtitle">
+                  {isFiniteNumber(serviceType.price) ? `$${Number(serviceType.price).toLocaleString()}` : "—"} • {isFiniteNumber(serviceType.duration_min) ? `${serviceType.duration_min} min` : "—"}
+                </div>
+                {serviceType.note ? (
+                  <div className="subtitle" style={{ marginTop: 4 }}>
+                    {serviceType.note}
+                  </div>
+                ) : null}
               </>
-            );
-          })()}
+            )}
+          </>
         </SummaryCard>
 
         <SummaryCard title="Service Center" index={2}>
@@ -257,15 +181,6 @@ export default function ReviewStep({ canSubmit }) {
         </div>
       )}
 
-      {(!serviceType?.id || !center?.id || !dateTime?.slotMeta?.id) && (
-        <div
-          className="card"
-          style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginTop: 12 }}
-          role="status"
-        >
-          One or more selections look like placeholders. Please go back and choose real items before confirming.
-        </div>
-      )}
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
         <button
           className="btn"

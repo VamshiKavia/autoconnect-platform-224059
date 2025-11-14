@@ -7,12 +7,8 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * ServiceTypeStep - Step 2: Choose a service type from Supabase "service_types" (read-only).
  *
  * Reads fields: id, name, description, base_price, duration_minutes, active
- * Displays all services, merging Supabase results with a client-side fallback list
- * so the UI immediately shows all items from design even if DB seeding is incomplete.
+ * Displays all services from Supabase with loading/empty/error states.
  * Maintains selection/validation and provides loading/empty/error states.
- *
- * TODO(services): Remove fallback once Supabase service_types is fully seeded.
- * TODO: Extract CardList component.
  */
 export default function ServiceTypeStep({ onValidChange }) {
   const { serviceType, setServiceType } = useBooking();
@@ -25,75 +21,8 @@ export default function ServiceTypeStep({ onValidChange }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // Cache for fallback full fetch
   const allRowsCacheRef = useRef(null);
-
   const supabase = getSupabaseClient();
-
-  // --- Client-side fallback list (from attached image) ---
-  // Note: numeric values represent "from" price and baseline duration when a range is shown.
-  // TODO(services): Remove this when DB has all items.
-  const fallbackServices = useMemo(
-    () => [
-      {
-        id: "fallback-oil-change",
-        name: "Oil Change",
-        description: "Keep your engine healthy with fresh oil and filter.",
-        base_price: 59,
-        duration_minutes: 30,
-        active: true,
-      },
-      {
-        id: "fallback-brake-inspection",
-        name: "Brake Inspection",
-        description: "Comprehensive brake system inspection for safety.",
-        base_price: 79,
-        duration_minutes: 45,
-        active: true,
-      },
-      {
-        id: "fallback-all-services",
-        name: "All Services",
-        description: "Full multi-point checkup. Ideal for periodic maintenance.",
-        base_price: 129,
-        duration_minutes: 90,
-        active: true,
-      },
-      {
-        id: "fallback-diagnostics",
-        name: "Diagnostics",
-        description: "Computerized scan and troubleshooting of warning lights.",
-        base_price: 89,
-        duration_minutes: 60,
-        active: true,
-      },
-      {
-        id: "fallback-ac-service",
-        name: "AC Service",
-        description: "AC performance check and top-up to stay cool.",
-        base_price: 99,
-        duration_minutes: 60,
-        active: true,
-      },
-      {
-        id: "fallback-car-washing",
-        name: "Car Washing",
-        description: "From $40–$60. Exterior wash and quick interior clean.",
-        base_price: 40,
-        duration_minutes: 45,
-        active: true,
-      },
-      {
-        id: "fallback-car-painting",
-        name: "Car Painting",
-        description: "From $300+. Panel and full-body paint options available.",
-        base_price: 300,
-        duration_minutes: 240,
-        active: true,
-      },
-    ],
-    []
-  );
 
   // Fetch all services from Supabase (no filters to ensure full list)
   const fetchAllServerSide = useCallback(async () => {
@@ -118,19 +47,6 @@ export default function ServiceTypeStep({ onValidChange }) {
     return { data: allRowsCacheRef.current };
   }, [supabase]);
 
-  // Merge DB results with fallback, avoiding duplicates by name (case-insensitive).
-  // Fallback items will get id=null and isFallback=true.
-  function mergeWithFallback(dbRows) {
-    const norm = (s) => (s || "").toString().trim().toLowerCase();
-    const seenByName = new Set(dbRows.map((r) => norm(r.name)));
-    const extras = fallbackServices
-      .filter((f) => !seenByName.has(norm(f.name)))
-      .map((f) => ({ ...f, id: null, isFallback: true }));
-    const combined = [...dbRows.map((r) => ({ ...r, isFallback: false })), ...extras];
-    combined.sort((a, b) => norm(a.name).localeCompare(norm(b.name)));
-    return combined;
-  }
-
   useEffect(() => {
     let cancelled = false;
 
@@ -140,17 +56,16 @@ export default function ServiceTypeStep({ onValidChange }) {
       try {
         const { data } = await fetchAllServerSide();
         if (cancelled) return;
-        setRows(mergeWithFallback(data));
+        setRows(data);
       } catch (e) {
         try {
           const { data } = await fetchAllClientSide();
           if (cancelled) return;
-          setRows(mergeWithFallback(data));
+          setRows(data);
         } catch (e2) {
           if (!cancelled) {
             setErr(e2?.message || e?.message || "Failed to load service types.");
-            // Even if both DB attempts failed, we still show fallback so the step isn't empty.
-            setRows(mergeWithFallback([]));
+            setRows([]);
           }
         }
       } finally {
@@ -165,16 +80,13 @@ export default function ServiceTypeStep({ onValidChange }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchAllServerSide, fetchAllClientSide]);
 
-  // Map selection to context
-  // Temporary rule: allow selecting fallback items by name; store with id=null and isFallback=true.
-  // TODO(services): Remove fallback selection path once DB seeding is complete.
+  // Map selection to context strictly by Supabase ID
   useEffect(() => {
-    // First try DB-backed by id
     const foundDb = rows.find((s) => s.id && String(s.id) === String(selected)) || null;
 
     if (foundDb) {
       const mapped = {
-        id: foundDb.id, // guaranteed UUID from DB
+        id: foundDb.id,
         name: foundDb.name || "",
         description: foundDb.description || "",
         price: safeNumber(foundDb.base_price),
@@ -182,33 +94,13 @@ export default function ServiceTypeStep({ onValidChange }) {
         active: !!foundDb.active,
         base_price: foundDb.base_price,
         duration_minutes: foundDb.duration_minutes,
-        isFallback: false,
       };
       setServiceType(mapped);
       onValidChange?.(true);
       return;
     }
 
-    // If not found by id and there are fallback rows, allow selecting a fallback by its name
-    const fallbackSelected = rows.find((s) => !s.id && s.name && String(s.name) === String(selected)) || null;
-    if (fallbackSelected) {
-      const mapped = {
-        id: null,
-        name: fallbackSelected.name || "",
-        description: fallbackSelected.description || "",
-        price: safeNumber(fallbackSelected.base_price),
-        duration_min: safeNumber(fallbackSelected.duration_minutes),
-        active: !!fallbackSelected.active,
-        base_price: fallbackSelected.base_price,
-        duration_minutes: fallbackSelected.duration_minutes,
-        isFallback: true,
-      };
-      setServiceType(mapped);
-      onValidChange?.(true);
-      return;
-    }
-
-    // Nothing selected
+    // Nothing selected or invalid selection
     setServiceType(null);
     onValidChange?.(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -247,68 +139,46 @@ export default function ServiceTypeStep({ onValidChange }) {
       )}
 
       {!loading && !err && rows.length > 0 && (
-        <div>
-          {rows.some((r) => !r.id) && (
-            <div
-              className="card"
-              style={{ background: "#FEFCE8", borderColor: "#FDE68A", color: "#92400E", marginBottom: 8 }}
-              role="status"
-            >
-              Some services are placeholders from our design preview. You can select them for now, but final confirmation will be blocked until they’re mapped to real items. TODO(services): remove when DB is seeded.
-            </div>
-          )}
-          <div className="grid" role="list" aria-label="Service types">
-            {rows.map((svc) => {
-              // When fallback, selection key uses name; when real, uses id
-              const key = svc.id ?? `fallback-${svc.name}`;
-              const isActive = String(selected) === String(svc.id || svc.name || "");
-              const price = safeNumber(svc.base_price);
-              const duration = safeNumber(svc.duration_minutes);
-              const isPlaceholder = !svc.id;
-              return (
-                <button
-                  key={key}
-                  role="listitem"
-                  className="card"
-                  style={{
-                    gridColumn: "span 4",
-                    textAlign: "left",
-                    borderColor: isActive ? "#93C5FD" : "var(--border)",
-                    background: isActive ? "#F3F4F6" : "var(--surface)",
-                    cursor: "pointer",
-                    opacity: 1
-                  }}
-                  onClick={() => {
-                    // Allow fallback by using name as the selection token
-                    setSelected(svc.id || svc.name || "");
-                  }}
-                  aria-pressed={isActive}
-                  aria-label={`Select ${svc.name || "service type"}${isPlaceholder ? " (placeholder)" : ""}`}
-                  title={isPlaceholder ? "Placeholder item selected. It will be mapped on the Review step if available." : undefined}
-                >
-                  <div className="row" style={{ justifyContent: "space-between" }}>
-                    <strong>{svc.name || "Untitled service"}</strong>
-                    <span className="subtitle">
-                      ${Number(price).toLocaleString()}
-                    </span>
+        <div className="grid" role="list" aria-label="Service types">
+          {rows.map((svc) => {
+            const key = svc.id;
+            const isActive = String(selected) === String(svc.id || "");
+            const price = safeNumber(svc.base_price);
+            const duration = safeNumber(svc.duration_minutes);
+            return (
+              <button
+                key={key}
+                role="listitem"
+                className="card"
+                style={{
+                  gridColumn: "span 4",
+                  textAlign: "left",
+                  borderColor: isActive ? "#93C5FD" : "var(--border)",
+                  background: isActive ? "#F3F4F6" : "var(--surface)",
+                  cursor: "pointer",
+                  opacity: 1
+                }}
+                onClick={() => setSelected(svc.id)}
+                aria-pressed={isActive}
+                aria-label={`Select ${svc.name || "service type"}`}
+              >
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <strong>{svc.name || "Untitled service"}</strong>
+                  <span className="subtitle">
+                    ${Number(price).toLocaleString()}
+                  </span>
+                </div>
+                <div style={{ color: "var(--muted)", marginTop: 6 }}>
+                  Approx. {duration} min
+                </div>
+                {svc.description ? (
+                  <div className="subtitle" style={{ marginTop: 4 }}>
+                    {svc.description}
                   </div>
-                  <div style={{ color: "var(--muted)", marginTop: 6 }}>
-                    Approx. {duration} min
-                  </div>
-                  {svc.description ? (
-                    <div className="subtitle" style={{ marginTop: 4 }}>
-                      {svc.description}
-                    </div>
-                  ) : null}
-                  {isPlaceholder && (
-                    <div className="subtitle" style={{ marginTop: 6, color: "#92400E" }}>
-                      Placeholder
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       )}
     </section>
