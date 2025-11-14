@@ -84,6 +84,9 @@ export const MockData = {
     { id: "brakes", name: "Brake Inspection", duration_min: 45, price: 99 },
     { id: "ac", name: "AC Service", duration_min: 60, price: 129 },
     { id: "diagnostics", name: "Diagnostics", duration_min: 60, price: 149 },
+    // Newly added service types
+    { id: "wash", name: "Car Washing", duration_min: 40, price: 49 },
+    { id: "paint", name: "Car Painting", duration_min: 240, price: 799 },
   ],
   // Centers with simple metadata
   centers: [
