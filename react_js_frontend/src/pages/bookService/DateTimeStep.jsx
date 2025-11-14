@@ -60,8 +60,7 @@ export default function DateTimeStep({ onValidChange }) {
 
         let query = supabase
           .from("service_center_slots")
-          .select("id, service_center_id, service_type_id, start_at, end_at, capacity, booked_count, status, active")
-          .eq("active", true)
+          .select("id, service_center_id, service_type_id, start_at, end_at, capacity, booked_count, status")
           .eq("status", "available")
           .eq("service_center_id", center.id)
           .gte("start_at", startIso)
