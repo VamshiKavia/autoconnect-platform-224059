@@ -7,8 +7,7 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * ServiceTypeStep - Step 2: Choose a service type from Supabase "service_types" (read-only).
  *
  * Reads fields: id, name, description, base_price, duration_minutes, active
- * Default filter: active = true
- * Server-side search (name/description) with fallback client filtering.
+ * Now fetches and displays all services without search or active-only filters/pagination.
  * Maintains selection/validation and provides loading/empty/error states.
  *
  * TODO: Extract CardList component.
@@ -18,10 +17,6 @@ export default function ServiceTypeStep({ onValidChange }) {
 
   // Selection state
   const [selected, setSelected] = useState(serviceType?.id || "");
-
-  // Query/filter state
-  const [search, setSearch] = useState("");
-  const [activeOnly, setActiveOnly] = useState(true);
 
   // Data and status
   const [rows, setRows] = useState([]);
@@ -33,27 +28,17 @@ export default function ServiceTypeStep({ onValidChange }) {
 
   const supabase = getSupabaseClient();
 
+  // Fetch all services from server (no filters)
   const fetchAllServerSide = useCallback(async () => {
-    const from = supabase.from("service_types");
-    let query = from
-      .select("id, name, description, base_price, duration_minutes, active", { count: "exact" })
+    const { data, error } = await supabase
+      .from("service_types")
+      .select("id, name, description, base_price, duration_minutes, active")
       .order("name", { ascending: true });
-
-    if (activeOnly) {
-      query = query.eq("active", true);
-    }
-    const term = (search || "").trim();
-    if (term) {
-      const like = `%${term}%`;
-      query = query.or(`name.ilike.${like},description.ilike.${like}`);
-    }
-
-    const { data, error, count } = await query;
     if (error) throw error;
+    return { data: Array.isArray(data) ? data : [] };
+  }, [supabase]);
 
-    return { data: Array.isArray(data) ? data : [], count: typeof count === "number" ? count : 0 };
-  }, [supabase, activeOnly, search]);
-
+  // Client-side fallback fetch (no filters)
   const fetchAllClientSide = useCallback(async () => {
     if (!allRowsCacheRef.current) {
       const { data, error } = await supabase
@@ -63,20 +48,8 @@ export default function ServiceTypeStep({ onValidChange }) {
       if (error) throw error;
       allRowsCacheRef.current = Array.isArray(data) ? data : [];
     }
-
-    const term = (search || "").toLowerCase();
-    let filtered = allRowsCacheRef.current;
-    if (activeOnly) filtered = filtered.filter((r) => !!r.active);
-    if (term) {
-      filtered = filtered.filter((r) => {
-        const name = (r.name || "").toLowerCase();
-        const desc = (r.description || "").toLowerCase();
-        return name.includes(term) || desc.includes(term);
-      });
-    }
-
-    return { data: filtered, count: filtered.length };
-  }, [supabase, activeOnly, search]);
+    return { data: allRowsCacheRef.current };
+  }, [supabase]);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,9 +61,6 @@ export default function ServiceTypeStep({ onValidChange }) {
         const { data } = await fetchAllServerSide();
         if (cancelled) return;
         setRows(data);
-        if (selected && !data.find((x) => String(x.id) === String(selected))) {
-          // keep previous selection from context if any
-        }
       } catch (e) {
         try {
           const { data } = await fetchAllClientSide();
@@ -108,9 +78,10 @@ export default function ServiceTypeStep({ onValidChange }) {
     }
 
     load();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchAllServerSide, fetchAllClientSide, selected]);
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchAllServerSide, fetchAllClientSide]);
 
   // Map selection to context
   useEffect(() => {
@@ -126,7 +97,9 @@ export default function ServiceTypeStep({ onValidChange }) {
           base_price: found.base_price,
           duration_minutes: found.duration_minutes,
         }
-      : (serviceType && String(serviceType.id) === String(selected) ? serviceType : null);
+      : serviceType && String(serviceType.id) === String(selected)
+      ? serviceType
+      : null;
 
     setServiceType(mapped);
     onValidChange?.(!!mapped);
@@ -137,48 +110,29 @@ export default function ServiceTypeStep({ onValidChange }) {
 
   return (
     <section className="card" aria-labelledby="servicetype-step-title">
-      <h3 id="servicetype-step-title" className="section-title">Select Service Type</h3>
+      <h3 id="servicetype-step-title" className="section-title">
+        Select Service Type
+      </h3>
       <p className="subtitle">Select a service to continue.</p>
 
-      {/* Filters */}
-      <div className="card" style={{ background: "var(--background)", marginBottom: 12 }}>
-        <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
-          <div style={{ flex: "1 1 260px", minWidth: 240 }}>
-            <label className="label" htmlFor="svc-search">Search</label>
-            <input
-              id="svc-search"
-              className="input"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or description"
-              aria-label="Search service types by name or description"
-            />
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              id="svc-active-only"
-              type="checkbox"
-              checked={activeOnly}
-              onChange={(e) => setActiveOnly(e.target.checked)}
-              aria-label="Active only"
-            />
-            <label htmlFor="svc-active-only" className="label" style={{ margin: 0 }}>Active only</label>
-          </div>
+      {loading && (
+        <div className="card" style={{ background: "var(--background)" }}>
+          Loading service types...
         </div>
-      </div>
-
-      {loading && <div className="card" style={{ background: "var(--background)" }}>Loading service types...</div>}
+      )}
 
       {err && (
-        <div className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
+        <div
+          className="card"
+          style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}
+        >
           {err}
         </div>
       )}
 
       {empty && (
         <div className="card" style={{ background: "var(--background)", color: "var(--muted)" }}>
-          No service types match the current filters.
+          No service types available at the moment.
         </div>
       )}
 
@@ -208,9 +162,7 @@ export default function ServiceTypeStep({ onValidChange }) {
                   <strong>{svc.name || "Untitled service"}</strong>
                   <span className="subtitle">${Number(price).toLocaleString()}</span>
                 </div>
-                <div style={{ color: "var(--muted)", marginTop: 6 }}>
-                  Approx. {duration} min
-                </div>
+                <div style={{ color: "var(--muted)", marginTop: 6 }}>Approx. {duration} min</div>
                 {svc.description ? (
                   <div className="subtitle" style={{ marginTop: 4 }}>
                     {svc.description}
