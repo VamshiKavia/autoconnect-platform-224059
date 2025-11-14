@@ -219,14 +219,7 @@ function mockGet(path) {
           { id: "p3", name: "Spark Plug", sku: "SP-301", price: 9.99 },
         ],
       };
-    case "/service-centers":
-      return {
-        ok: true,
-        data: [
-          { id: "c1", name: "Ocean Service - JP Nagar", address: "JP Nagar, Bengaluru", lat: 12.90, lng: 77.58, phone: "+91-80-1234-5678" },
-          { id: "c2", name: "Ocean Service - Banashankari", address: "2nd Stage, Bengaluru", lat: 12.93, lng: 77.55, phone: "+91-80-9876-5432" },
-        ],
-      };
+
     case "/profile":
       return {
         ok: true,

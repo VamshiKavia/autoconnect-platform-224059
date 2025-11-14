@@ -1,6 +1,6 @@
 # React Frontend - Ocean Professional
 
-Minimalist SPA for the car company app with navigation, auth (stub), cars, services, parts, service centers, and profile management (mock).
+Minimalist SPA for the car company app with navigation, auth (stub), cars, services, parts, and profile management (mock).
 
 ## Environment
 
