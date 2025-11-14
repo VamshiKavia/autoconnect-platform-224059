@@ -56,6 +56,14 @@ export default function Header() {
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Parts</NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              "nav-link" + (isActive ? " active" : "")
+            }
+            to="/book-service"
+          >
+            Book My Service
+          </NavLink>
         </nav>
 
         <div ref={menuRef} style={{ marginLeft: "auto", position: "relative" }}>
