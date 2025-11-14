@@ -12,26 +12,44 @@ import { listMockBookingsByUser, subscribeMockBookingsChanged } from './bookServ
  */
 export default function MyBookings() {
   const { user, loading: userLoading } = useUser();
-  const [bookings, setBookings] = useState([]);
+  const [allBookings, setAllBookings] = useState([]); // raw list from source
   const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null); // selected booking for details
 
-  const hasData = useMemo(() => Array.isArray(bookings) && bookings.length > 0, [bookings]);
+  // UI state - filters, sorting, pagination (component state for now; TODO: sync to URL)
+  const [statusFilter, setStatusFilter] = useState([]); // array of statuses
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sortField, setSortField] = useState('scheduled'); // 'scheduled' | 'center' | 'service' | 'status'
+  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' | 'desc'
+  const [pageSize, setPageSize] = useState(10); // 5 | 10 | 20
+  const [page, setPage] = useState(1); // 1-based index
 
   const supabase = useMemo(() => getSupabaseClient(), []);
   const supabaseEnabled = useMemo(() => isSupabaseEnabled(), []);
 
+  // Helper: normalize status text
+  const norm = (s) => String(s || '').trim().toLowerCase();
+
+  // Load data from source
   useEffect(() => {
     let isMounted = true;
 
     async function loadSupabase() {
-      if (!user) return;
+      if (!user) {
+        setAllBookings([]);
+        setStatus('success');
+        return;
+      }
       setStatus('loading');
       setError(null);
 
       try {
-        const { data, error: qErr } = await supabase
+        // TODO: When Supabase is enabled, use server-side filters, sorting, and pagination.
+        // Example (guarded): apply .in for status, .gte/.lte for slot.start_at, .order, and .range for pagination.
+        // Also add TODO: fetch total count via .select({ count: 'exact', head: true }) to compute total pages.
+        let query = supabase
           .from('service_bookings')
           .select(`
             id,
@@ -60,15 +78,48 @@ export default function MyBookings() {
               end_at
             )
           `)
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
+          .eq('user_id', user.id);
 
+        // Guarded server-side filters (future enablement)
+        if (statusFilter.length > 0) {
+          // e.g., query = query.in('status', statusFilter);
+          // TODO: enable when Supabase mode is active
+        }
+        if (dateFrom) {
+          // e.g., query = query.gte('service_slots.start_at', new Date(dateFrom).toISOString());
+        }
+        if (dateTo) {
+          // e.g., query = query.lte('service_slots.end_at', new Date(dateTo).toISOString());
+        }
+
+        // Guarded server-side sorting (future enablement)
+        if (sortField === 'scheduled') {
+          // e.g., query = query.order('service_slots.start_at', { ascending: sortOrder === 'asc' });
+        } else if (sortField === 'center') {
+          // e.g., query = query.order('service_centers.name', { ascending: sortOrder === 'asc' });
+        } else if (sortField === 'service') {
+          // e.g., query = query.order('service_types.name', { ascending: sortOrder === 'asc' });
+        } else if (sortField === 'status') {
+          // e.g., query = query.order('status', { ascending: sortOrder === 'asc' });
+        }
+
+        // Guarded server-side pagination (future enablement)
+        // const from = (page - 1) * pageSize;
+        // const to = from + pageSize - 1;
+        // query = query.range(from, to);
+
+        const { data, error: qErr } = await query.order('created_at', { ascending: false });
         if (qErr) {
           throw qErr;
         }
         if (!isMounted) return;
-        setBookings(data || []);
+        setAllBookings(data || []);
         setStatus('success');
+
+        // TODO: When server-side mode is enabled, also fetch total count to compute total pages.
+        // const { count } = await supabase.from('service_bookings').select('*', { count: 'exact', head: true });
+        // setTotalCount(count ?? 0);
+
       } catch (e) {
         console.error('Failed to load bookings', e);
         if (!isMounted) return;
@@ -84,7 +135,7 @@ export default function MyBookings() {
       try {
         const data = listMockBookingsByUser(uid);
         if (!isMounted) return;
-        setBookings(data || []);
+        setAllBookings(data || []);
         setStatus('success');
       } catch (e) {
         console.error('Failed to load mock bookings', e);
@@ -94,11 +145,10 @@ export default function MyBookings() {
       }
     }
 
-    // Initial load
+    // Initial load or when dependencies change (user or supabase toggle)
     if (!userLoading) {
       if (supabaseEnabled) {
-        if (user) loadSupabase();
-        else { setBookings([]); setStatus('success'); }
+        loadSupabase();
       } else {
         loadMock();
       }
@@ -114,7 +164,78 @@ export default function MyBookings() {
     }
 
     return () => { isMounted = false; unsubscribe?.(); };
-  }, [user, userLoading, supabase, supabaseEnabled]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, userLoading, supabaseEnabled, supabase, page, pageSize, sortField, sortOrder, statusFilter.join(','), dateFrom, dateTo]);
+
+  // Client-side filtering, sorting, and pagination when in mock mode (and as a fallback)
+  const processed = useMemo(() => {
+    let list = Array.isArray(allBookings) ? [...allBookings] : [];
+
+    // Filter by status (multi-select)
+    if (statusFilter.length > 0) {
+      const set = new Set(statusFilter.map(norm));
+      list = list.filter(b => set.has(norm(b.status)));
+    }
+
+    // Filter by date range (based on service_slots.start_at/end_at if available, else created_at)
+    const parseDateSafe = (v) => {
+      try {
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? null : d;
+      } catch { return null; }
+    };
+
+    const from = dateFrom ? parseDateSafe(dateFrom) : null;
+    const to = dateTo ? parseDateSafe(`${dateTo}T23:59:59`) : null;
+
+    if (from || to) {
+      list = list.filter(b => {
+        const start = b?.service_slots?.start_at ? parseDateSafe(b.service_slots.start_at) : parseDateSafe(b.created_at);
+        if (!start) return false;
+        if (from && start < from) return false;
+        if (to && start > to) return false;
+        return true;
+      });
+    }
+
+    // Sorting
+    const compareStr = (a, b) => String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' });
+    list.sort((a, b) => {
+      let dir = sortOrder === 'asc' ? 1 : -1;
+      if (sortField === 'scheduled') {
+        const atA = a?.service_slots?.start_at || a?.created_at;
+        const atB = b?.service_slots?.start_at || b?.created_at;
+        const aTime = new Date(atA || 0).getTime();
+        const bTime = new Date(atB || 0).getTime();
+        return (aTime - bTime) * dir;
+      }
+      if (sortField === 'center') {
+        return compareStr(a?.service_centers?.name, b?.service_centers?.name) * dir;
+      }
+      if (sortField === 'service') {
+        return compareStr(a?.service_types?.name, b?.service_types?.name) * dir;
+      }
+      if (sortField === 'status') {
+        return compareStr(a?.status, b?.status) * dir;
+      }
+      return 0;
+    });
+
+    return list;
+  }, [allBookings, statusFilter, dateFrom, dateTo, sortField, sortOrder]);
+
+  // Pagination
+  const totalItems = processed.length; // TODO (Supabase mode): use server-side total count
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStartIdx = (currentPage - 1) * pageSize;
+  const pageEndIdx = pageStartIdx + pageSize;
+  const pageItems = processed.slice(pageStartIdx, pageEndIdx);
+
+  useEffect(() => {
+    // If filters/sorts or page size change, reset to first page to avoid empty page
+    setPage(1);
+  }, [statusFilter.join(','), dateFrom, dateTo, sortField, sortOrder, pageSize]);
 
   function formatDateTime(dt) {
     try {
@@ -247,6 +368,108 @@ export default function MyBookings() {
     );
   }
 
+  // Accessible controls for filters, sorting, and pagination
+  function Controls() {
+    const statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+    const toggleStatus = (val) => {
+      const v = norm(val);
+      setStatusFilter((prev) => (prev.includes(v) ? prev.filter(s => s !== v) : [...prev, v]));
+    };
+    const onSortChange = (e) => setSortField(e.target.value);
+    const onOrderChange = (e) => setSortOrder(e.target.value);
+    const onPageSizeChange = (e) => setPageSize(Number(e.target.value));
+
+    return (
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="row" style={{ gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          {/* Status multi-select via checkboxes for accessibility */}
+          <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+            <legend className="label">Status</legend>
+            <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+              {statuses.map(s => (
+                <label key={s} className="subtitle" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Filter status ${s}`}
+                    checked={statusFilter.includes(s)}
+                    onChange={() => toggleStatus(s)}
+                  />
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {/* Date range */}
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <div>
+              <label className="label" htmlFor="date-from">From</label>
+              <input
+                id="date-from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                aria-label="Filter from date"
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="date-to">To</label>
+              <input
+                id="date-to"
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label="Filter to date"
+              />
+            </div>
+          </div>
+
+          {/* Sorting */}
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <div>
+              <label className="label" htmlFor="sort-field">Sort by</label>
+              <select id="sort-field" value={sortField} onChange={onSortChange} aria-label="Sort field">
+                <option value="scheduled">Scheduled time</option>
+                <option value="center">Service center</option>
+                <option value="service">Service type</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="sort-order">Order</label>
+              <select id="sort-order" value={sortOrder} onChange={onOrderChange} aria-label="Sort order">
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Page size */}
+          <div>
+            <label className="label" htmlFor="page-size">Page size</label>
+            <select id="page-size" value={pageSize} onChange={onPageSizeChange} aria-label="Page size">
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
+          </div>
+
+          {/* Reset filters */}
+          <div style={{ marginLeft: 'auto' }}>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => { setStatusFilter([]); setDateFrom(''); setDateTo(''); }}
+              aria-label="Reset filters"
+            >
+              Reset filters
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const Content = () => {
     if (userLoading || status === 'loading') {
       return (
@@ -280,13 +503,12 @@ export default function MyBookings() {
       );
     }
 
-    if (!hasData) {
+    if (!Array.isArray(pageItems) || pageItems.length === 0) {
       return (
         <div className="card">
           <div className="card--section">
-            <strong>No bookings yet</strong>
-            <p className="muted" style={{ margin: 0 }}>When you book a service, it will appear here.</p>
-            {/* TODO: Consider adding a primary CTA to navigate to booking flow */}
+            <strong>No bookings match your filters</strong>
+            <p className="muted" style={{ margin: 0 }}>Try adjusting status or date range.</p>
           </div>
         </div>
       );
@@ -297,7 +519,7 @@ export default function MyBookings() {
       <div className="stack">
         {/* Cards (mobile-first) */}
         <div className="grid" style={{ gridTemplateColumns: 'repeat(12, 1fr)' }}>
-          {bookings.map((b) => {
+          {pageItems.map((b) => {
             const vehicle = b.vehicles;
             const serviceType = b.service_types;
             const center = b.service_centers;
@@ -347,6 +569,33 @@ export default function MyBookings() {
           })}
         </div>
 
+        {/* Pagination controls */}
+        <nav className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }} aria-label="Pagination">
+          <div className="subtitle">Page {currentPage} of {totalPages}</div>
+          <div className="row" style={{ gap: 8 }}>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              aria-disabled={currentPage <= 1}
+              aria-label="Previous page"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              aria-disabled={currentPage >= totalPages}
+              aria-label="Next page"
+            >
+              Next
+            </button>
+          </div>
+        </nav>
+
         {selected && <BookingDetails booking={selected} />}
       </div>
     );
@@ -367,10 +616,7 @@ export default function MyBookings() {
           )}
         </header>
 
-        {/* Placeholder for future filters */}
-        <div className="row" style={{ marginBottom: 12 }}>
-          {/* TODO: Add status/date filters */}
-        </div>
+        <Controls />
 
         <Content />
       </section>
