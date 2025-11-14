@@ -1,8 +1,8 @@
 # Supabase Integration - Frontend
 
-This app uses Supabase Auth (email/password) and Supabase Database (read-only examples: "Car parts", user-specific "user_vehicles", public "service_types", and public "service_centers").
+This app uses Supabase Auth and Supabase Database for the booking flow, vehicle management, catalog (service types, centers), and time slots.
 
-Follow these steps to configure and verify:
+Follow these steps to configure and verify.
 
 ## 1) Environment variables
 
@@ -20,144 +20,167 @@ In Supabase dashboard:
 
 - Authentication > Providers > Email
   - Enable "Email" provider.
-  - Check "Enable email signups".
-  - Configure password policy (min length ≥ 6 to match UI minimum; adjust if needed).
+  - Enable "Email signups".
+  - Configure password policy (min length ≥ 6 to match UI).
 
 - Authentication > URL Configuration
   - Add your frontend URL to "Redirect URLs":
     - http://localhost:3000
-    - If using previews or custom domains, add those too.
-  - Save.
+  - If "Confirm email" is enabled, signups will redirect to:
+    - `${REACT_APP_FRONTEND_URL}/login` (e.g. http://localhost:3000/login)
 
-- If "Confirm email" is enabled:
-  - Users may need to confirm before signing in.
-  - Our signUp uses `emailRedirectTo: {FRONTEND_URL}/login`.
-
-## 3) Redirect URL verification
-
-This app constructs `emailRedirectTo` as:
-- `${REACT_APP_FRONTEND_URL}/login` (normalized to avoid trailing slash issues)
-Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabase.
-
-## 4) Database tables
-
-- Table: "Car parts" (with a space)
-  - Columns: id, title, Description, Category, Features, image_url, created_at, updated_at
-  - RLS: Configure read access as needed (public read or user-specific policies).
+## 3) Database tables (expected by UI)
 
 - Table: user_vehicles
-  - Columns (expected by UI): id, user_id, make, model, vin, nickname
-  - RLS: At minimum, enable policies that allow authenticated users to read their own rows:
-    - Example:
-      policy "Users can read their vehicles" on user_vehicles
-      for select
-      using (auth.uid() = user_id);
+  - Columns: id, user_id, make, model, vin, nickname
+  - RLS example:
+    policy "Users can read their vehicles" on user_vehicles
+    for select
+    using (auth.uid() = user_id);
 
 - Table: service_types
-  - Columns (used by UI): id, name, description, base_price, duration_minutes, active
-  - The UI reads only rows where `active = true`.
-  - RLS: If this is public catalog data, you can allow anon read; otherwise restrict as needed.
-  - Example (public read):
+  - Columns: id, name, description, base_price, duration_minutes, active
+  - UI reads rows with `active = true`.
+  - Example (public read of active only):
     policy "Public read of active service types" on service_types
     for select
     using (active = true);
 
 - Table: service_centers
-  - Columns (used by UI): id, name, address_line1, address_line2, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours (json), active
-  - The UI reads only rows where `active = true`.
-  - RLS: If this is public information, you may allow anon read for active centers:
+  - Columns: id, name, address_line1, address_line2, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours (json), active
+  - UI reads rows with `active = true`.
+  - Example (public read of active only):
     policy "Public read of active service centers" on service_centers
     for select
     using (active = true);
 
 - Table: service_center_slots
-  - Columns (expected by UI): id (uuid), service_center_id (uuid), service_type_id (uuid|null), start_at (timestamptz), end_at (timestamptz), capacity (int), booked_count (int), status (text: 'available'|'held'|'booked'|'blocked'), active (boolean)
-  - The Date & Time step reads only rows where:
+  - Columns: id (uuid), service_center_id (uuid), service_type_id (uuid|null), start_at (timestamptz), end_at (timestamptz), capacity (int), booked_count (int), status (text: 'available'|'held'|'booked'|'blocked'), active (boolean)
+  - UI reads rows where:
     - active = true
     - status = 'available'
-    - service_center_id = selected center id
-    - start_at within the selected calendar day (inclusive) [computed from local YYYY-MM-DD to 00:00:00..23:59:59.999, compared via ISO]
-    - If a service type is selected and service_type_id is not null, filter by `service_type_id = selected`
-  - RLS: If slots should be publicly readable, add a policy similar to:
+    - service_center_id = selected center
+    - start_at within selected calendar day (computed from local date to ISO; DB stores UTC)
+    - If service type selected and slot has service_type_id, filter by `service_type_id`
+  - Example (public read of available slots):
     policy "Public read of available active slots" on service_center_slots
     for select
     using (active = true AND status = 'available');
-  - Timezone note:
-    - We currently convert the chosen local date into a start/end ISO range using the user's local timezone and query `start_at` between those ISO timestamps. Supabase stores timestamptz in UTC.
-    - TODO(TZ): Make timezone explicit and consistent across backend/DB/app. Consider center-level timezone and server-side conversion.
-  - Conflict/capacity note:
-    - Client prevents selecting past times and only shows status='available'. Final conflict/capacity enforcement must happen on booking creation in the backend with transactional checks.
-  - Display mapping:
-    - Buttons show local time ranges via Intl.DateTimeFormat.
-    - When selected, we persist `{ id, start_at, end_at }` in `dateTime.slotMeta` and a friendly `dateTime.slot` label for Review.
 
-## 5) Frontend behavior
+- Table: service_bookings (NEW write in Review step)
+  - Expected columns:
+    - id (primary key)
+    - user_id (uuid, references auth.users)
+    - vehicle_id (uuid, nullable; references user_vehicles.id)
+    - service_type_id (uuid)
+    - service_center_id (uuid)
+    - slot_id (uuid, references service_center_slots.id)
+    - contact_name (text)
+    - contact_phone (text)
+    - contact_email (text)
+    - pickup_drop (boolean)
+    - notes (text)
+    - estimated_price (numeric, nullable)
+    - estimated_duration_minutes (integer, nullable)
+    - status (text) default 'pending'
+    - created_at (timestamptz) default now()
+  - RLS requirement for client insert:
+    policy "Users can create their own bookings" on service_bookings
+    for insert
+    with check (user_id = auth.uid());
 
-- `src/lib/supabaseClient.js` reads env vars and creates a singleton client.
-- `src/context/AuthContext.js`
-  - Initializes session, exposes `user`, and syncs access token to localStorage.
-  - `signUp(email, password, metadata?)` uses `emailRedirectTo` derived from `REACT_APP_FRONTEND_URL` or `window.location.origin`.
+  - Optional additional RLS:
+    - Allow selecting own bookings:
+      policy "Users can read their bookings" on service_bookings
+      for select
+      using (user_id = auth.uid());
 
-- `src/pages/bookService/VehicleStep.jsx`
-  - Queries Supabase on mount to load `user_vehicles` for the current user:
-    - Uses `supabase.auth.getUser()` (or session from context) to get user id.
-    - Filters `.from("user_vehicles").select("id, make, model, vin, nickname").eq("user_id", userId)`.
-  - Implements loading, empty, and error states.
-  - Selecting a saved vehicle populates the form (make, model, vin, nickname); VIN remains optional.
-  - Manual entry is still supported and drives validation:
-    - Make, model required; VIN optional.
+## 4) Frontend behavior by step
 
-- `src/pages/bookService/ServiceTypeStep.jsx`
-  - Reads from Supabase:
-    - `.from("service_types").select("id, name, description, base_price, duration_minutes, active").eq("active", true)`
-  - Implements loading, empty, and error states.
-  - Maps to booking context:
+- src/lib/supabaseClient.js
+  - Provides `getSupabaseClient()` singleton configured from env vars.
+  - Persists session, auto refresh token.
+
+- Step 1: src/pages/bookService/VehicleStep.jsx
+  - Loads current user's vehicles via `supabase.auth.getUser()` -> user_id, then:
+    `.from("user_vehicles").select("id, make, model, vin, nickname").eq("user_id", userId)`
+  - Displays loading/empty/error states.
+  - Selecting a saved vehicle maps to context; VIN optional.
+
+- Step 2: src/pages/bookService/ServiceTypeStep.jsx
+  - Reads:
+    `.from("service_types").select("id, name, description, base_price, duration_minutes, active").eq("active", true)`
+  - Maps to context:
     - price <- base_price
     - duration_min <- duration_minutes
 
-- `src/pages/bookService/CenterStep.jsx`
-  - Reads from Supabase:
-    - `.from("service_centers").select("id, name, address_line1, address_line2, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours, active").eq("active", true)`
-  - Implements loading, empty, and error states.
-  - Maps fields and persists selection in context. Review step shows `center.name` and `center.address`.
-  - Optional geolocation:
-    - If the browser provides location, we compute a simple Haversine distance in km; if denied/unavailable, show a placeholder.
+- Step 3: src/pages/bookService/CenterStep.jsx
+  - Reads:
+    `.from("service_centers").select("id, name, address_line1, address_line2, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours, active").eq("active", true)`
 
-- `src/components/PartsList.js` continues to read "Car parts" (read-only).
+- Step 4: src/pages/bookService/DateTimeStep.jsx
+  - Reads slots from service_center_slots using selected center id and selected date's start/end ISO range.
+  - Filters to active & available; hides past times for "today".
+  - Persists `dateTime.slotMeta = { id, start_at, end_at }` and friendly `dateTime.slot`.
+
+- Step 5: src/pages/bookService/DetailsStep.jsx
+  - Validates: name, phone (basic), email (basic).
+  - Stores `details = { name, phone, email, notes, pickup, loaner }`.
+
+- Step 6: src/pages/bookService/ReviewStep.jsx (UPDATED)
+  - Validates that all required selections exist before enabling Confirm:
+    - vehicle present (make/model), service_type_id, service_center_id, slot_id, details fields
+  - On Confirm:
+    - Fetches user via `supabase.auth.getUser()`
+    - Inserts into `service_bookings` with RLS-compatible `user_id = auth.uid()`:
+      {
+        user_id,
+        vehicle_id, // optional if selected saved vehicle has id
+        service_type_id,
+        service_center_id,
+        slot_id,
+        contact_name,
+        contact_phone,
+        contact_email,
+        pickup_drop,
+        notes,
+        estimated_price,               // from selected service type (if present)
+        estimated_duration_minutes,    // from selected service type
+        status: "pending",
+      }
+    - Uses `.insert(payload).select("id").single()` and shows:
+      - Loading state while submitting ("Confirming...")
+      - Success view with booking reference id
+      - Error banner on failure
+  - TODO (Server-side):
+    - Validation & conflict checks (slot capacity, double-booking) should be enforced on server/DB.
+    - Consider unique/partial indexes and transactional checks to guarantee integrity.
+
+## 5) Timezone notes
+
+- The client constructs a date range from the user's local YYYY-MM-DD (00:00..23:59:59.999) and compares to timestamptz in UTC.
+- Consider moving this logic server-side or adding center-level timezone metadata to avoid ambiguity.
 
 ## 6) Local verification checklist
 
-- Start frontend: `npm start` at port 3000
-- Go to http://localhost:3000/login, create/sign in to an account (for user_vehicles).
+1) Start frontend: `npm start` at port 3000
+2) Create/sign in to an account.
+3) Seed minimal data:
+   - service_types with `active = true`
+   - service_centers with `active = true`
+   - service_center_slots with `active = true`, `status = 'available'`, and times in the future for your selected date
+   - Optionally user_vehicles for your user id
+4) Navigate to /book-service and complete steps:
+   - Vehicle (manual or saved)
+   - Service Type (from Supabase)
+   - Service Center (from Supabase)
+   - Pick Date & Time (slots from Supabase)
+   - Details
+   - Review & Confirm -> should create a `service_bookings` row and show booking id on success.
 
-- Seed tables as needed:
+If you see errors:
+- Verify env vars (`REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`)
+- Check RLS policies described above—especially insert on `service_bookings` with `user_id = auth.uid()`
+- Confirm data exists for service_types, service_centers, and slots for the selected date
 
-  -- user_vehicles (per-user)
-  insert into user_vehicles (user_id, make, model, vin, nickname)
-  values ('<YOUR_USER_ID>', 'Hyundai', 'i20', 'MAHXXXXXXXXXXXXXX', 'Hatchback');
-
-  -- service_types (public or restricted read)
-  insert into service_types (name, description, base_price, duration_minutes, active)
-  values
-    ('Oil Change', 'Engine oil and filter replacement', 69, 30, true),
-    ('Brake Inspection', 'Brake pads, rotors, and fluid check', 99, 45, true),
-    ('AC Service', 'AC gas refill and leak detection', 129, 60, true);
-
-  -- service_centers (public or restricted read)
-  insert into service_centers (name, address_line1, city, state, postal_code, country, latitude, longitude, phone, email, opening_hours, active)
-  values
-    ('Ocean Motors Service - Downtown', '15 Bull Temple Road', 'Bengaluru', 'KA', '560004', 'IN', 12.9036, 77.5143, '+91 98765 43210', 'downtown@oceanmotors.example', '{"mon_fri":"9:00-18:00","sat":"10:00-16:00","sun":"closed"}', true);
-
-- Navigate to /book-service:
-  - Step 1 (Select Vehicle) lists user vehicles (if any).
-  - Step 2 (Select Service Type) lists active service types from Supabase with loading/empty/error states.
-  - Step 3 (Choose Service Center) lists active service centers from Supabase with loading/empty/error states and optional distance.
-  - Review step shows selected center name and address.
-
-If you see "Failed to load service centers.":
-- Ensure `service_centers` table exists with the columns above.
-- Confirm RLS policies allow select for your intended audience (anon or authenticated).
-- Verify env vars (REACT_APP_SUPABASE_URL/KEY) and restart dev server.
-
-Security note: Do not commit real keys. Always use environment variables.
-
+Security note: Never commit real keys. Always use environment variables.

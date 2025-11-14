@@ -1,14 +1,129 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { BOOKING_STEPS, useBooking } from "./context";
+import getSupabaseClient from "../../lib/supabaseClient";
 
 /**
 // PUBLIC_INTERFACE
  * ReviewStep - Step 6: Summarize all selections and provide confirm action.
  *
- * No API integration yet; Confirm triggers a placeholder alert.
+ * On confirm:
+ * - Validates all required selections exist
+ * - Fetches current user via supabase.auth.getUser()
+ * - Inserts into service_bookings with RLS-compatible user_id (auth.uid())
+ * - Fields: user_id, vehicle_id (from selected vehicle.id if exists), service_type_id,
+ *   service_center_id, slot_id, contact_name, contact_phone, contact_email,
+ *   pickup_drop, notes, estimated_price, estimated_duration_minutes, status='pending'
+ * - Shows loading state, success confirmation with booking id, and error state
+ *
+ * TODO(Server): Add server-side validation and conflict checking to avoid double booking.
  */
-export default function ReviewStep({ canSubmit, onConfirm }) {
+export default function ReviewStep({ canSubmit }) {
   const { vehicle, serviceType, center, dateTime, details } = useBooking();
+  const supabase = getSupabaseClient();
+
+  // UI state
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [success, setSuccess] = useState(null); // { id, reference } or similar
+
+  // Derived values for validation and payload
+  const requiredReady = useMemo(() => {
+    const hasVehicle = !!(vehicle && (vehicle.make || vehicle.model));
+    const hasServiceType = !!serviceType?.id;
+    const hasCenter = !!center?.id;
+    const hasSlot = !!dateTime?.slotMeta?.id;
+    const hasDetails = !!(details?.name && details?.phone && details?.email);
+    return hasVehicle && hasServiceType && hasCenter && hasSlot && hasDetails;
+  }, [vehicle, serviceType?.id, center?.id, dateTime?.slotMeta?.id, details?.name, details?.phone, details?.email]);
+
+  const disabled = !(canSubmit && requiredReady) || submitting;
+
+  // PUBLIC_INTERFACE
+  async function handleConfirm() {
+    /**
+     * Attempt to create a booking row in Supabase.
+     * Security: Relies on RLS policy allowing insert where user_id = auth.uid().
+     * The user must be authenticated; otherwise, we show an error.
+     */
+    if (disabled) return;
+
+    setSubmitting(true);
+    setErrorMsg("");
+    try {
+      // Get authenticated user
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      const userId = authData?.user?.id;
+      if (!userId) {
+        throw new Error("You must be signed in to confirm a booking.");
+      }
+
+      // Collect payload
+      const payload = {
+        user_id: userId,
+        // vehicle_id optional: if user selected a saved vehicle with an id; else null
+        vehicle_id: vehicle?.id || null,
+        service_type_id: serviceType?.id,
+        service_center_id: center?.id,
+        slot_id: dateTime?.slotMeta?.id,
+        contact_name: details?.name || "",
+        contact_phone: details?.phone || "",
+        contact_email: details?.email || "",
+        pickup_drop: !!details?.pickup,
+        notes: details?.notes || "",
+        estimated_price: isFiniteNumber(serviceType?.price) ? Number(serviceType.price) : null,
+        estimated_duration_minutes: isFiniteNumber(serviceType?.duration_min) ? Number(serviceType.duration_min) : null,
+        status: "pending",
+      };
+
+      // Minimal client-side validation to prevent malformed insert
+      validatePayload(payload);
+
+      // Insert row; select id back for reference
+      const { data, error } = await supabase
+        .from("service_bookings")
+        .insert(payload)
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      const bookingId = data?.id;
+      setSuccess({ id: bookingId });
+    } catch (e) {
+      setErrorMsg(e?.message || "Failed to create booking. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Success view
+  if (success?.id) {
+    return (
+      <div className="card" aria-live="polite" aria-atomic="true" aria-labelledby="booking-success-title">
+        <h3 id="booking-success-title" className="section-title">Booking Confirmed</h3>
+        <p className="subtitle">
+          Your booking has been created successfully. Reference:
+          <strong> #{String(success.id)}</strong>
+        </p>
+        <div className="card" style={{ background: "var(--bg)" }}>
+          <div className="label">Summary</div>
+          <ul style={{ marginTop: 6 }}>
+            <li>Vehicle: {(vehicle?.make || "-")} {(vehicle?.model || "")}{vehicle?.vin ? ` (VIN: ${vehicle.vin})` : ""}</li>
+            <li>Service: {serviceType?.name} {serviceType?.duration_min ? `• ${serviceType.duration_min} min` : ""}</li>
+            <li>Center: {center?.name}</li>
+            <li>Date/Time: {dateTime?.date} {dateTime?.slot ? `• ${dateTime.slot}` : ""}</li>
+          </ul>
+        </div>
+        <div className="subtitle" style={{ marginTop: 12 }}>
+          We’ve sent a confirmation to {details?.email}. We’ll contact you at {details?.phone} if needed.
+        </div>
+        <div className="subtitle" style={{ marginTop: 8 }}>
+          Steps: {BOOKING_STEPS.join(" → ")}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card" aria-labelledby="review-step-title">
@@ -26,7 +141,7 @@ export default function ReviewStep({ canSubmit, onConfirm }) {
           {serviceType && (
             <>
               <div className="subtitle">
-                ${serviceType.price} • {serviceType.duration_min} min
+                {isFiniteNumber(serviceType.price) ? `$${Number(serviceType.price).toLocaleString()}` : "—"} • {isFiniteNumber(serviceType.duration_min) ? `${serviceType.duration_min} min` : "—"}
               </div>
               {serviceType.note ? (
                 <div className="subtitle" style={{ marginTop: 4 }}>
@@ -68,26 +183,51 @@ export default function ReviewStep({ canSubmit, onConfirm }) {
         </SummaryCard>
       </div>
 
+      {/* Error banner */}
+      {errorMsg && (
+        <div
+          className="card"
+          style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)", marginTop: 12 }}
+          role="alert"
+        >
+          {errorMsg}
+        </div>
+      )}
+
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
         <button
           className="btn"
-          onClick={() => {
-            if (!canSubmit) return;
-            // TODO(API): Replace with POST /api/bookings call and proper error handling
-            onConfirm?.();
-          }}
-          disabled={!canSubmit}
-          aria-disabled={!canSubmit}
+          onClick={handleConfirm}
+          disabled={disabled}
+          aria-disabled={disabled}
         >
-          Confirm Booking
+          {submitting ? "Confirming..." : "Confirm Booking"}
         </button>
       </div>
 
       <div className="subtitle" style={{ marginTop: 8 }}>
         Steps: {BOOKING_STEPS.join(" → ")}
       </div>
+
+      {/* TODO(Server): add conflict checking (e.g., capacity, double-booking) on server-side. */}
     </div>
   );
+}
+
+function isFiniteNumber(v) {
+  const n = Number(v);
+  return Number.isFinite(n);
+}
+
+function validatePayload(p) {
+  // Simple required checks; server must re-validate
+  if (!p.user_id) throw new Error("Not signed in.");
+  if (!p.service_type_id) throw new Error("Service type is missing.");
+  if (!p.service_center_id) throw new Error("Service center is missing.");
+  if (!p.slot_id) throw new Error("Time slot is missing.");
+  if (!p.contact_name || !p.contact_phone || !p.contact_email) {
+    throw new Error("Contact details are incomplete.");
+  }
 }
 
 function SummaryCard({ title, index, children }) {
