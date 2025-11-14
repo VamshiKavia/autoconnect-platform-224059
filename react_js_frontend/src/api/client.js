@@ -9,6 +9,8 @@
  * Health endpoint is typically `/` or `/healthz`.
  */
 
+import { isMockBackendEnabled } from "../config";
+
 // Determine raw base from env with sensible default
 const RAW_BASE =
   process.env.REACT_APP_API_BASE ||
@@ -53,21 +55,30 @@ export function getApiBase() {
  */
 export async function apiGet(path, opts = {}) {
   const url = resolveUrl(path);
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(opts.headers || {}),
-    },
-    credentials: "include",
-  });
-  if (!res.ok) {
-    const t = await safeJson(res);
-    const detail =
-      t?.detail || t?.message || t?.error || (await res.text()).slice(0, 300);
-    throw new Error(`GET ${path} failed (${res.status}): ${detail || "Unknown error"}`);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(opts.headers || {}),
+        ...getAuthHeader(), // attach token if present
+      },
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const t = await safeJson(res);
+      const detail =
+        t?.detail || t?.message || t?.error || (await res.text()).slice(0, 300);
+      throw new Error(`GET ${path} failed (${res.status}): ${detail || "Unknown error"}`);
+    }
+    return res.json();
+  } catch (err) {
+    if (isMockBackendEnabled()) {
+      const mock = mockGet(path);
+      if (mock.ok) return mock.data;
+    }
+    throw err;
   }
-  return res.json();
 }
 
 /**
@@ -79,22 +90,31 @@ export async function apiGet(path, opts = {}) {
  */
 export async function apiPost(path, body, opts = {}) {
   const url = resolveUrl(path);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(opts.headers || {}),
-    },
-    body: JSON.stringify(body),
-    credentials: "include",
-  });
-  if (!res.ok) {
-    const t = await safeJson(res);
-    const detail =
-      t?.detail || t?.message || t?.error || (await res.text()).slice(0, 300);
-    throw new Error(`POST ${path} failed (${res.status}): ${detail || "Unknown error"}`);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(opts.headers || {}),
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify(body),
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const t = await safeJson(res);
+      const detail =
+        t?.detail || t?.message || t?.error || (await res.text()).slice(0, 300);
+      throw new Error(`POST ${path} failed (${res.status}): ${detail || "Unknown error"}`);
+    }
+    return res.json();
+  } catch (err) {
+    if (isMockBackendEnabled()) {
+      const mock = mockPost(path, body);
+      if (mock.ok) return mock.data;
+    }
+    throw err;
   }
-  return res.json();
 }
 
 /**
@@ -106,22 +126,31 @@ export async function apiPost(path, body, opts = {}) {
  */
 export async function apiPut(path, body, opts = {}) {
   const url = resolveUrl(path);
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...(opts.headers || {}),
-    },
-    body: JSON.stringify(body),
-    credentials: "include",
-  });
-  if (!res.ok) {
-    const t = await safeJson(res);
-    const detail =
-      t?.detail || t?.message || t?.error || (await res.text()).slice(0, 300);
-    throw new Error(`PUT ${path} failed (${res.status}): ${detail || "Unknown error"}`);
+  try {
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...(opts.headers || {}),
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify(body),
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const t = await safeJson(res);
+      const detail =
+        t?.detail || t?.message || t?.error || (await res.text()).slice(0, 300);
+      throw new Error(`PUT ${path} failed (${res.status}): ${detail || "Unknown error"}`);
+    }
+    return res.json();
+  } catch (err) {
+    if (isMockBackendEnabled()) {
+      const mock = mockPut(path, body);
+      if (mock.ok) return mock.data;
+    }
+    throw err;
   }
-  return res.json();
 }
 
 async function safeJson(res) {
@@ -157,6 +186,104 @@ export async function apiHealth() {
   } catch (e) {
     return { ok: false, status: 0, error: e?.message || "Network error" };
   }
+}
+
+// ---- Mock fallback data (feature-flagged) ----
+function mockGet(path) {
+  const now = new Date().toISOString();
+  switch (normalize(path)) {
+    case "/cars":
+      return {
+        ok: true,
+        data: [
+          { id: 1, name: "Aerexa", type: "Sedan", year: 2025, price: 28990, is_new: true },
+          { id: 2, name: "Straton Sport", type: "Coupe", year: 2025, price: 41990, is_new: true },
+          { id: 3, name: "Azure GT", type: "Coupe", year: 2024, price: 48990, is_new: false },
+        ],
+      };
+    case "/services":
+      return {
+        ok: true,
+        data: [
+          { id: "svc1", name: "Oil Change", price: 69, duration_min: 30 },
+          { id: "svc2", name: "Brake Inspection", price: 99, duration_min: 45 },
+          { id: "svc3", name: "AC Service", price: 129, duration_min: 60 },
+        ],
+      };
+    case "/parts":
+      return {
+        ok: true,
+        data: [
+          { id: "p1", name: "Air Filter", sku: "AF-001", price: 19.99 },
+          { id: "p2", name: "Brake Pads", sku: "BP-101", price: 49.99 },
+          { id: "p3", name: "Spark Plug", sku: "SP-301", price: 9.99 },
+        ],
+      };
+    case "/service-centers":
+      return {
+        ok: true,
+        data: [
+          { id: "c1", name: "Ocean Service - JP Nagar", address: "JP Nagar, Bengaluru", lat: 12.90, lng: 77.58, phone: "+91-80-1234-5678" },
+          { id: "c2", name: "Ocean Service - Banashankari", address: "2nd Stage, Bengaluru", lat: 12.93, lng: 77.55, phone: "+91-80-9876-5432" },
+        ],
+      };
+    case "/profile":
+      return {
+        ok: true,
+        data: {
+          email: "demo@example.com",
+          name: "Demo User",
+          phone: "",
+          bio: "",
+          created_at: now,
+        },
+      };
+    default:
+      return { ok: false, data: null };
+  }
+}
+
+function mockPost(path, body) {
+  const p = normalize(path);
+  if (p === "/auth/login") {
+    if (body?.email && body?.password) {
+      return {
+        ok: true,
+        data: {
+          access_token: "mock-token",
+          token_type: "bearer",
+          user: { email: body.email, name: "Demo User" },
+        },
+      };
+    }
+    return { ok: false, data: null };
+  }
+  if (p === "/auth/register") {
+    if (body?.email && body?.password && body?.name) {
+      return {
+        ok: true,
+        data: {
+          access_token: "mock-token",
+          token_type: "bearer",
+          user: { email: body.email, name: body.name },
+        },
+      };
+    }
+    return { ok: false, data: null };
+  }
+  return { ok: false, data: null };
+}
+
+function mockPut(path, body) {
+  const p = normalize(path);
+  if (p === "/profile") {
+    return { ok: true, data: body };
+  }
+  return { ok: false, data: null };
+}
+
+function normalize(path) {
+  return path.startsWith("/") ? path : `/${path}`;
 }
 
 export default { apiGet, apiPost, apiPut, getAuthHeader, getApiBase, apiHealth };
