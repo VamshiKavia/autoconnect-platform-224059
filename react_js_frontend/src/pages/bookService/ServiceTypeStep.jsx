@@ -9,7 +9,7 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * Schema-aligned query:
  *   supabase
  *     .from('services_catalog') // Note: source table is services_catalog
- *     .select('id,name,description,category,features,image_url')
+ *     .select('id,name,description,features,image_url')
  *     .order('name', { ascending: true })
  *
  * Notes:
@@ -46,10 +46,10 @@ export default function ServiceTypeStep({ onValidChange }) {
         const supabase = getSupabaseClient();
 
         // IMPORTANT: Service catalog source table is services_catalog
-        // Select only the columns used by UI and map/guard in case some fields are absent.
+        // Select only existing columns per schema screenshot; do not request 'category'.
         const { data, error } = await supabase
           .from("services_catalog")
-          .select("id,name,description,category,features,image_url")
+          .select("id,name,description,features,image_url")
           .order("name", { ascending: true });
 
         if (error) throw error;
@@ -60,8 +60,8 @@ export default function ServiceTypeStep({ onValidChange }) {
         const message = e?.message || "";
         const raw = String(message || "").toLowerCase();
 
-        // Include table name in error so future mismatches are obvious
-        let friendly = "Failed to load service types from table services_catalog.";
+        // Friendly message without referencing missing columns
+        let friendly = "Failed to load service types from services_catalog.";
         if (
           raw.includes("permission") ||
           raw.includes("rls") ||
@@ -124,7 +124,6 @@ export default function ServiceTypeStep({ onValidChange }) {
       id: r?.id,
       name: r?.name ?? "",
       description: r?.description ?? "",
-      category: r?.category ?? "",
       image_url: r?.image_url ?? "",
       _features: parseFeatures(r?.features),
     }));
@@ -137,7 +136,7 @@ export default function ServiceTypeStep({ onValidChange }) {
           id: found.id,
           name: found.name || "Service",
           description: found.description || "",
-          category: found.category || "",
+          // category removed as it's not present in schema
           features: found._features || [],
           image_url: found.image_url || "",
         }
