@@ -102,14 +102,27 @@ If the "Select Service Type" step shows "Failed to load service types":
 
 - Open the browser console:
   - You should see a diagnostic log:
-    `[ServiceTypeStep] Supabase env present? { hasUrl: true|false, hasKey: true|false, NODE_ENV: ... }`
+    `[ServiceTypeStep] Env check { hasUrl: true|false, hasKey: true|false, NODE_ENV: ... }`
     - If hasUrl or hasKey is false, set REACT_APP_SUPABASE_URL/KEY and restart the dev server.
 - Error banner now surfaces code and message if available (e.g., permission denied, relation does not exist).
 - If your table or columns differ:
-  - Confirm table name is exactly `service_types`.
-  - If your schema uses `base_price` and `duration_minutes`, the UI will automatically map those.
+  - Confirm table name is exactly `services_catalog`.
+  - Expected columns used by UI: `id, name, description` and optionally `image_url`.
 - For RLS errors:
-  - Create a read policy on `service_types` for anon or authenticated role as needed (e.g., `true` condition for public read, or restrict to tenants as appropriate).
+  - Create a read policy on `services_catalog` for anon or authenticated role as needed (e.g., `true` condition for public read, or restricted as appropriate).
+
+### Seeding sample service types from the UI
+
+The Service Type step includes a "Seed sample services" button when the list is empty or on error. Clicking it will insert these rows into `public.services_catalog`:
+
+- Oil Change — "Engine oil and filter replacement with multi-point inspection."
+- Brake Check — "Brake pads, rotors, and fluid inspection for safety and performance."
+- Car Washing — "Exterior wash and interior vacuum with optional detailing."
+- Car Painting — "Premium body repainting and scratch repair with color matching."
+
+Notes:
+- The insert uses the existing Supabase JS client (anon key). Ensure your RLS allows insert for the current role (typically authenticated). If inserts fail due to `image_url` column missing, the app retries without `image_url`.
+- After a successful insert, the list automatically refreshes to show the new items.
 
 ## 8) Local verification checklist
 

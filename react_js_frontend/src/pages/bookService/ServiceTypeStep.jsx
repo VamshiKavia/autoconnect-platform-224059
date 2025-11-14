@@ -20,6 +20,9 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * - Improves empty-state with a Retry CTA.
  * - If table truly has zero rows (count=0), shows guidance that no services are configured.
  * - If RLS limits rows or permission errors occur, surfaces error.code/message and RLS guidance.
+ * - Adds a Seed button that inserts sample rows (Oil Change, Brake Check, Car Washing, Car Painting)
+ *   into public.services_catalog using existing Supabase env vars and client. After successful insert,
+ *   triggers re-fetch to show the fresh data.
  *
  * Validates: One service type must be selected.
  */
@@ -31,6 +34,8 @@ export default function ServiceTypeStep({ onValidChange }) {
   const [err, setErr] = useState("");
   const [rlsWarning, setRlsWarning] = useState("");
   const [visibleCount, setVisibleCount] = useState(null); // number | null
+  const [seeding, setSeeding] = useState(false);
+  const [seedError, setSeedError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +119,82 @@ export default function ServiceTypeStep({ onValidChange }) {
     }
   }, []);
 
+  // PUBLIC_INTERFACE
+  async function seedServicesCatalog() {
+    /**
+     * Inserts sample rows into public.services_catalog:
+     * - Oil Change, Brake Check, Car Washing, Car Painting
+     * Includes fields: name, description, and image_url if present in schema.
+     * Uses anon key/env vars already configured via Supabase client.
+     */
+    setSeedError("");
+    setSeeding(true);
+    try {
+      const supabase = getSupabaseClient();
+
+      const samples = [
+        {
+          name: "Oil Change",
+          description: "Engine oil and filter replacement with multi-point inspection.",
+          image_url: "/assets/oil-change.png",
+        },
+        {
+          name: "Brake Check",
+          description: "Brake pads, rotors, and fluid inspection for safety and performance.",
+          image_url: "/assets/brake-check.png",
+        },
+        {
+          name: "Car Washing",
+          description: "Exterior wash and interior vacuum with optional detailing.",
+          image_url: "/assets/car-wash.png",
+        },
+        {
+          name: "Car Painting",
+          description: "Premium body repainting and scratch repair with color matching.",
+          image_url: "/assets/car-painting.png",
+        },
+      ];
+
+      // Attempt insert with image_url; if column doesn't exist, insert without it.
+      let { error: insertErr } = await supabase.from("services_catalog").insert(
+        samples.map((s) => ({
+          name: s.name,
+          description: s.description,
+          image_url: s.image_url, // may fail if column not present
+        }))
+      );
+
+      if (insertErr) {
+        const raw = (insertErr.message || "").toLowerCase();
+        const columnMissing =
+          raw.includes("column") && raw.includes("image_url") && (raw.includes("does not exist") || raw.includes("missing"));
+        // Retry without image_url if the column seems missing
+        if (columnMissing) {
+          const { error: retryErr } = await supabase.from("services_catalog").insert(
+            samples.map((s) => ({
+              name: s.name,
+              description: s.description,
+            }))
+          );
+          if (retryErr) throw retryErr;
+        } else {
+          throw insertErr;
+        }
+      }
+
+      // After successful insert, re-fetch list
+      await load();
+    } catch (e) {
+      const code = e?.code || "";
+      const message = e?.message || "Failed to seed services_catalog.";
+      setSeedError(`${message} ${code ? `(code: ${code})` : ""}`);
+      // eslint-disable-next-line no-console
+      console.error("[ServiceTypeStep] seed error", { code, message, stack: e?.stack });
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -156,7 +237,7 @@ export default function ServiceTypeStep({ onValidChange }) {
     const noConfigured = typeof visibleCount === "number" && visibleCount === 0;
     return (
       <div className="card" style={{ color: "var(--muted)" }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
           <div>
             {noConfigured ? (
               <>
@@ -164,7 +245,7 @@ export default function ServiceTypeStep({ onValidChange }) {
                   No services configured
                 </div>
                 <div className="subtitle" style={{ marginBottom: 0 }}>
-                  The services_catalog table is currently empty. Please add service types in your Supabase project.
+                  The services_catalog table is currently empty. You can seed sample service types now.
                 </div>
               </>
             ) : (
@@ -177,10 +258,25 @@ export default function ServiceTypeStep({ onValidChange }) {
                 </div>
               </>
             )}
+            {seedError && (
+              <div className="card" style={{ color: "var(--error)", marginTop: 8, background: "#fff" }}>
+                {seedError}
+              </div>
+            )}
           </div>
-          <div>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <button className="btn secondary" onClick={load} aria-label="Retry loading service types">
               Retry
+            </button>
+            <button
+              className="btn"
+              onClick={seedServicesCatalog}
+              disabled={seeding}
+              aria-disabled={seeding}
+              aria-label="Seed sample service types into services_catalog"
+              title="Insert Oil Change, Brake Check, Car Washing, Car Painting"
+            >
+              {seeding ? "Seeding..." : "Seed sample services"}
             </button>
           </div>
         </div>
@@ -206,9 +302,18 @@ export default function ServiceTypeStep({ onValidChange }) {
       {err && (
         <div className="card" style={{ color: "var(--error)" }}>
           {err}
-          <div style={{ marginTop: 8 }}>
+          <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
             <button className="btn secondary" onClick={load} aria-label="Retry loading after error">
               Retry
+            </button>
+            <button
+              className="btn"
+              onClick={seedServicesCatalog}
+              disabled={seeding}
+              aria-disabled={seeding}
+              aria-label="Seed sample service types after error"
+            >
+              {seeding ? "Seeding..." : "Seed sample services"}
             </button>
           </div>
         </div>
