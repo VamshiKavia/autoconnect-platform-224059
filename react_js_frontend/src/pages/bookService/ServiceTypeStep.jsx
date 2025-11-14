@@ -7,14 +7,13 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * ServiceTypeStep - Step 2: Choose a service type from Supabase "service_types" (read-only).
  *
  * Reads fields: id, name, description, base_price, duration_minutes, active
- * Default filter: active = true (toggle-able)
- * Implements: text search (name/description), pagination (5/10/20), next/prev, page indicators.
- * Tries server-side filtering + pagination; falls back to client-side if server fails.
- * Maintains selection/validation across page changes. Provides loading/empty/error states.
+ * Default filter: active = true
+ * Implements: server-side text search (name/description) and active filter.
+ * Fetches all matching rows (no pagination range) to ensure the full set is displayed.
+ * Maintains selection/validation. Provides loading/empty/error states.
  *
- * TODO(ADMIN-WRITES): Add admin-only create/update/deactivate flows for service_types.
- * TODO(FILTERS): Add advanced filters (price range, duration range).
- * TODO(SORTING): Add sorting options (price, duration, name).
+ * Notes:
+ * - For future scalability, consider windowed rendering/virtualization if dataset grows very large.
  */
 export default function ServiceTypeStep({ onValidChange }) {
   const { serviceType, setServiceType } = useBooking();
@@ -23,38 +22,27 @@ export default function ServiceTypeStep({ onValidChange }) {
   const [selected, setSelected] = useState(serviceType?.id || "");
 
   // Query/filter state
-  const [search, setSearch] = useState("");
-  const [activeOnly, setActiveOnly] = useState(true);
-
-  // Pagination state
-  const PAGE_SIZES = [5, 10, 20];
-  const [pageSize, setPageSize] = useState(10);
-  const [page, setPage] = useState(1); // 1-based
-  const [totalCount, setTotalCount] = useState(0);
+  const [search, setSearch] = useState(""); // default: no search term
+  const [activeOnly, setActiveOnly] = useState(true); // default: show only active
 
   // Data and status
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // Cache of all rows for client-side fallback (optional, lazily loaded)
+  // Cache for fallback full fetch
   const allRowsCacheRef = useRef(null);
 
   const supabase = getSupabaseClient();
 
-  // Reset to first page if filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, activeOnly, pageSize]);
-
   /**
-   * Build Supabase query with optional filters and pagination.
+   * Build Supabase query with optional filters.
    * Uses ilike on name or description for case-insensitive contains.
    * Applies active=true when toggle is on.
+   * IMPORTANT: No .range(...) call so we fetch all matching rows.
    */
-  const fetchServerSide = useCallback(async () => {
+  const fetchAllServerSide = useCallback(async () => {
     const from = supabase.from("service_types");
-    // select with count option to get total rows for pagination
     let query = from
       .select("id, name, description, base_price, duration_minutes, active", { count: "exact" })
       .order("name", { ascending: true });
@@ -64,27 +52,20 @@ export default function ServiceTypeStep({ onValidChange }) {
     }
     const term = (search || "").trim();
     if (term) {
-      // Use or with ilike on name/description
       const like = `%${term}%`;
-      // Supabase JS: .or("name.ilike.%term%,description.ilike.%term%")
       query = query.or(`name.ilike.${like},description.ilike.${like}`);
     }
-
-    // Range for pagination. page is 1-based.
-    const offset = (page - 1) * pageSize;
-    const to = offset + pageSize - 1;
-    query = query.range(offset, to);
 
     const { data, error, count } = await query;
     if (error) throw error;
 
     return { data: Array.isArray(data) ? data : [], count: typeof count === "number" ? count : 0 };
-  }, [supabase, activeOnly, search, page, pageSize]);
+  }, [supabase, activeOnly, search]);
 
   /**
-   * Client-side fallback: if server-side fails, load all (once) and filter/paginate locally.
+   * Client-side fallback: if server-side fails, load all (once) and filter locally.
    */
-  const fetchClientSide = useCallback(async () => {
+  const fetchAllClientSide = useCallback(async () => {
     // Fetch all only once and cache
     if (!allRowsCacheRef.current) {
       const { data, error } = await supabase
@@ -109,16 +90,10 @@ export default function ServiceTypeStep({ onValidChange }) {
       });
     }
 
-    // Set total count and current page slice
-    const total = filtered.length;
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const slice = filtered.slice(start, end);
+    return { data: filtered, count: filtered.length };
+  }, [supabase, activeOnly, search]);
 
-    return { data: slice, count: total };
-  }, [supabase, activeOnly, search, page, pageSize]);
-
-  // Load data whenever filters/pagination change
+  // Load data whenever filters change
   useEffect(() => {
     let cancelled = false;
 
@@ -126,30 +101,25 @@ export default function ServiceTypeStep({ onValidChange }) {
       setLoading(true);
       setErr("");
       try {
-        // Attempt server-side first
-        const { data, count } = await fetchServerSide();
+        // Attempt server-side first (no pagination)
+        const { data, count } = await fetchAllServerSide();
         if (cancelled) return;
 
         setRows(data);
-        setTotalCount(count || data.length || 0);
-
-        // If selection is not in the current page, keep it but do not clear; selection persistence across pages
+        // Keep selection if still present; otherwise do not force-clear to preserve user intent
         if (selected && !data.find((x) => String(x.id) === String(selected))) {
-          // no action: selection persists
+          // keep previous selection from context if any
         }
       } catch (e) {
-        // Fallback to client-side filtering
+        // Fallback to client-side filtering of a complete dataset
         try {
-          const { data, count } = await fetchClientSide();
+          const { data } = await fetchAllClientSide();
           if (cancelled) return;
-
           setRows(data);
-          setTotalCount(count || data.length || 0);
         } catch (e2) {
           if (!cancelled) {
             setErr(e2?.message || e?.message || "Failed to load service types.");
             setRows([]);
-            setTotalCount(0);
           }
         }
       } finally {
@@ -161,58 +131,31 @@ export default function ServiceTypeStep({ onValidChange }) {
     return () => {
       cancelled = true;
     };
-  }, [fetchServerSide, fetchClientSide, selected]);
+  }, [fetchAllServerSide, fetchAllClientSide, selected]);
 
   // Map selected id to full object and update booking context + validity
   useEffect(() => {
-    // Search in current rows; if not found, we still keep prior context until user changes page or selection reappears
     const found = rows.find((s) => String(s.id) === String(selected)) || null;
 
-    // Normalize mapped fields to what the rest of the app expects
     const mapped = found
       ? {
           id: found.id,
           name: found.name || "",
           description: found.description || "",
-          // Keep compatibility with Review step fields
           price: safeNumber(found.base_price),
           duration_min: safeNumber(found.duration_minutes),
           active: !!found.active,
-          // Extra: raw fields preserved (could be used later)
           base_price: found.base_price,
           duration_minutes: found.duration_minutes,
         }
-      : // If the selected item is not in the current page, try to keep previous selection if it matches serviceType
-        (serviceType && String(serviceType.id) === String(selected) ? serviceType : null);
+      : (serviceType && String(serviceType.id) === String(selected) ? serviceType : null);
 
     setServiceType(mapped);
     onValidChange?.(!!mapped);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, rows]);
 
-  const totalPages = useMemo(() => {
-    return pageSize > 0 ? Math.max(1, Math.ceil((totalCount || 0) / pageSize)) : 1;
-  }, [totalCount, pageSize]);
-
   const empty = useMemo(() => !loading && !err && rows.length === 0, [loading, err, rows]);
-
-  // Pagination controls handlers
-  const canPrev = page > 1;
-  const canNext = page < totalPages;
-
-  function prevPage() {
-    if (canPrev) setPage((p) => Math.max(1, p - 1));
-  }
-  function nextPage() {
-    if (canNext) setPage((p) => Math.min(totalPages, p + 1));
-  }
-  function onPageSizeChange(e) {
-    const v = Number(e.target.value);
-    if (PAGE_SIZES.includes(v)) {
-      setPageSize(v);
-      setPage(1);
-    }
-  }
 
   return (
     <div className="card" aria-labelledby="servicetype-step-title">
@@ -248,21 +191,6 @@ export default function ServiceTypeStep({ onValidChange }) {
               Active only
             </label>
           </div>
-          <div style={{ marginLeft: "auto" }}>
-            <label className="label" htmlFor="svc-page-size">Page size</label>
-            <select
-              id="svc-page-size"
-              className="input"
-              value={pageSize}
-              onChange={onPageSizeChange}
-              aria-label="Page size"
-              style={{ width: 100 }}
-            >
-              {PAGE_SIZES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
         </div>
       </div>
 
@@ -282,6 +210,7 @@ export default function ServiceTypeStep({ onValidChange }) {
 
       {!loading && !err && rows.length > 0 && (
         <>
+          {/* Full list; if this grows large later, consider virtualization */}
           <div className="grid" role="list" aria-label="Service types">
             {rows.map((svc) => {
               const isActive = String(selected) === String(svc.id);
@@ -320,37 +249,6 @@ export default function ServiceTypeStep({ onValidChange }) {
               );
             })}
           </div>
-
-          {/* Pagination controls */}
-          <nav
-            className="row"
-            aria-label="Pagination"
-            style={{ justifyContent: "space-between", marginTop: 12 }}
-          >
-            <div className="subtitle" aria-live="polite">
-              Page {page} of {totalPages} • {totalCount} result{totalCount === 1 ? "" : "s"}
-            </div>
-            <div className="row" role="group" aria-label="Pager">
-              <button
-                className="btn secondary"
-                onClick={prevPage}
-                disabled={!canPrev}
-                aria-disabled={!canPrev}
-                aria-label="Previous page"
-              >
-                Prev
-              </button>
-              <button
-                className="btn"
-                onClick={nextPage}
-                disabled={!canNext}
-                aria-disabled={!canNext}
-                aria-label="Next page"
-              >
-                Next
-              </button>
-            </div>
-          </nav>
         </>
       )}
     </div>
