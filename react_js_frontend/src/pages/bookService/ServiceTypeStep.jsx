@@ -15,6 +15,8 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * - Some projects use base_price/duration_minutes instead. We try the primary
  *   schema first, then gracefully fall back to alternate column names.
  * - Improved error parsing for RLS/permission and configuration errors.
+ * - Adds diagnostic console log with environment availability for Supabase configuration
+ *   (without printing sensitive values) to help local troubleshooting.
  *
  * Validates: One service type must be selected.
  */
@@ -31,6 +33,15 @@ export default function ServiceTypeStep({ onValidChange }) {
       setLoading(true);
       setErr("");
       try {
+        // Diagnostic: check env presence (do not log secrets)
+        const hasUrl = !!process.env.REACT_APP_SUPABASE_URL;
+        const hasKey = !!process.env.REACT_APP_SUPABASE_KEY;
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[ServiceTypeStep] Supabase env present?",
+          { hasUrl, hasKey, NODE_ENV: process.env.NODE_ENV }
+        );
+
         const supabase = getSupabaseClient();
 
         // Primary expected schema
@@ -70,29 +81,40 @@ export default function ServiceTypeStep({ onValidChange }) {
           throw error;
         }
 
-        if (!cancelled) setRows(Array.isArray(data) ? data : []);
+        if (!cancelled) {
+          // Clear any prior error if data is available to ensure failure banner disappears
+          if (data && Array.isArray(data) && data.length > 0) {
+            setErr("");
+          }
+          setRows(Array.isArray(data) ? data : []);
+        }
       } catch (e) {
-        // Friendlier error mapping without leaking sensitive info
-        const raw = (e?.message || "").toLowerCase();
+        // Friendlier error mapping while surfacing diagnostic code+message
+        const code = e?.code || "";
+        const message = e?.message || "";
+        const raw = message.toLowerCase();
+
+        let friendly = "Failed to load service types.";
         if (
           raw.includes("permission") ||
           raw.includes("rls") ||
           raw.includes("not authorized") ||
           raw.includes("policy")
         ) {
-          setErr("You do not have access to view service types.");
+          friendly = "You do not have access to view service types.";
         } else if (raw.includes("invalid") && raw.includes("api key")) {
-          setErr("Supabase credentials are invalid. Check your environment variables.");
+          friendly = "Supabase credentials are invalid. Check your environment variables.";
         } else if (raw.includes("fetch") || raw.includes("network") || raw.includes("url")) {
-          setErr("Unable to reach database. Check REACT_APP_SUPABASE_URL and network.");
-        } else {
-          setErr("Failed to load service types.");
+          friendly = "Unable to reach database. Check REACT_APP_SUPABASE_URL and network.";
+        } else if (raw.includes("relation") && raw.includes("does not exist")) {
+          friendly = "The service types table was not found. Verify the table name 'service_types'.";
         }
-        // Optionally surface non-sensitive diagnostic hint in dev
-        if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
-          console.warn("[ServiceTypeStep] load error:", e?.message || e);
-        }
+
+        // Show friendly plus non-sensitive diagnostic in UI
+        setErr(`${friendly} ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
+
+        // eslint-disable-next-line no-console
+        console.error("[ServiceTypeStep] load error", { code, message, stack: e?.stack });
       } finally {
         if (!cancelled) setLoading(false);
       }

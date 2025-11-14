@@ -1,6 +1,7 @@
 # Supabase Integration - Frontend
 
 This app uses Supabase Auth (email/password) and Supabase Database (read-only example table "Car parts").
+The booking flow also reads from: service_types, service_centers, center_slots (and writes to bookings on confirmation).
 
 Follow these steps to configure and verify:
 
@@ -77,13 +78,38 @@ If you see "Invalid email or password" even with correct credentials, check the 
   - `src/pages/bookService/ReviewStep.jsx` disables the Confirm button and shows a focused sign-in banner if unauthenticated.
   - Upon successful sign-in, the Confirm action is re-enabled without losing previously entered booking state held in context.
 
-## 6) Table "Car parts" (optional data)
+## 6) Tables and expected columns
 
-- Name: Car parts (with a space)
-- Columns: id, title, Description, Category, Features, image_url, created_at, updated_at
-- RLS: Configure read access as needed.
+- "Car parts" (with a space)
+  - Columns: id, title, Description, Category, Features, image_url, created_at, updated_at
+- service_types
+  - Primary expected columns: id, name, description, price, duration_min
+  - Fallback (if schema differs): base_price (mapped to price), duration_minutes (mapped to duration_min)
+- service_centers
+  - Columns: id, name, address, lat, lng, phone, hours
+- center_slots
+  - Columns: id, center_id, date, start_time, end_time, is_available
+- bookings (inserted on confirmation)
+  - Columns: user_id, vehicle_id, service_type_id, service_center_id, datetime, notes, status
 
-## 7) Local verification checklist
+Ensure RLS policies allow appropriate read (and insert for bookings) access for authenticated users.
+
+## 7) Troubleshooting service types loading
+
+If the "Select Service Type" step shows "Failed to load service types":
+
+- Open the browser console:
+  - You should see a diagnostic log:
+    `[ServiceTypeStep] Supabase env present? { hasUrl: true|false, hasKey: true|false, NODE_ENV: ... }`
+    - If hasUrl or hasKey is false, set REACT_APP_SUPABASE_URL/KEY and restart the dev server.
+- Error banner now surfaces code and message if available (e.g., permission denied, relation does not exist).
+- If your table or columns differ:
+  - Confirm table name is exactly `service_types`.
+  - If your schema uses `base_price` and `duration_minutes`, the UI will automatically map those.
+- For RLS errors:
+  - Create a read policy on `service_types` for anon or authenticated role as needed (e.g., `true` condition for public read, or restrict to tenants as appropriate).
+
+## 8) Local verification checklist
 
 - Start backend (optional, only for demo REST calls): http://localhost:3001
 - Start frontend: `npm start` at port 3000
@@ -101,14 +127,10 @@ Create and verify a test account:
 3. Sign In:
    - Use the same email/password.
    - Expected: Redirects to "/" and header shows your display name.
-4. Refresh:
-   - Reload the page; you should remain signed in (session persistence).
+4. Book Service:
+   - Navigate to /book-service, go to "Select Service Type".
+   - Expected: Service types render if RLS and columns are configured.
 5. Profile:
    - Navigate to /profile, change display name, save, and see "Saved".
-
-If still seeing "invalid credentials":
-- Check browser console warnings for guidance (we surface redirect URL hints).
-- Re-validate env vars and Supabase dashboard settings above.
-- Regenerate anon key if compromised or mis-copied.
 
 Security note: Do not commit real keys. Always use environment variables.
