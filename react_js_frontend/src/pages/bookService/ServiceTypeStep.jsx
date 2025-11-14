@@ -9,11 +9,11 @@ import getSupabaseClient from "../../lib/supabaseClient";
  * Schema-aligned query:
  *   supabase
  *     .from('services_catalog') // Note: source table is services_catalog
- *     .select('id,name,description,features,image_url')
+ *     .select('id,name,description,image_url')
  *     .order('name', { ascending: true })
  *
  * Notes:
- * - features may be text[], json, or stringified JSON; we normalize for safe display.
+ * - services_catalog currently does not include 'features' or 'category' columns; UI avoids requesting/using them.
  * - Adds diagnostics for env presence and detailed error banner with code+message.
  * - Shows an explicit RLS banner suggestion if permission errors are detected.
  *
@@ -46,10 +46,10 @@ export default function ServiceTypeStep({ onValidChange }) {
         const supabase = getSupabaseClient();
 
         // IMPORTANT: Service catalog source table is services_catalog
-        // Select only existing columns per schema screenshot; do not request 'category'.
+        // Select only existing columns; do not request 'features' or 'category'.
         const { data, error } = await supabase
           .from("services_catalog")
-          .select("id,name,description,features,image_url")
+          .select("id,name,description,image_url")
           .order("name", { ascending: true });
 
         if (error) throw error;
@@ -60,7 +60,7 @@ export default function ServiceTypeStep({ onValidChange }) {
         const message = e?.message || "";
         const raw = String(message || "").toLowerCase();
 
-        // Friendly message without referencing missing columns
+        // Friendly message reflecting corrected select (no mention of removed columns)
         let friendly = "Failed to load service types from services_catalog.";
         if (
           raw.includes("permission") ||
@@ -97,35 +97,14 @@ export default function ServiceTypeStep({ onValidChange }) {
     };
   }, []);
 
-  // Normalize features for display and map to booking context
+  // Normalize rows and map to booking context shape.
+  // services_catalog does not have features/category; image_url may be optional.
   const normalized = useMemo(() => {
-    const parseFeatures = (f) => {
-      if (f == null) return [];
-      if (Array.isArray(f)) return f.map((x) => String(x));
-      if (typeof f === "object") return [JSON.stringify(f)];
-      if (typeof f === "string") {
-        const t = f.trim();
-        if (!t) return [];
-        try {
-          const parsed = JSON.parse(t);
-          if (Array.isArray(parsed)) return parsed.map((x) => String(x));
-          if (parsed && typeof parsed === "object") return [JSON.stringify(parsed)];
-        } catch {
-          // not JSON
-        }
-        // split on commas for basic text[] approximation
-        if (t.includes(",")) return t.split(",").map((s) => s.trim()).filter(Boolean);
-        return [t];
-      }
-      return [String(f)];
-    };
-
     return (rows || []).map((r) => ({
       id: r?.id,
       name: r?.name ?? "",
       description: r?.description ?? "",
-      image_url: r?.image_url ?? "",
-      _features: parseFeatures(r?.features),
+      image_url: r?.image_url ?? "", // guard optional
     }));
   }, [rows]);
 
@@ -136,8 +115,6 @@ export default function ServiceTypeStep({ onValidChange }) {
           id: found.id,
           name: found.name || "Service",
           description: found.description || "",
-          // category removed as it's not present in schema
-          features: found._features || [],
           image_url: found.image_url || "",
         }
       : null;
@@ -188,13 +165,7 @@ export default function ServiceTypeStep({ onValidChange }) {
                 {svc.description ? (
                   <div className="subtitle" style={{ marginTop: 6 }}>{svc.description}</div>
                 ) : null}
-                {svc._features && svc._features.length > 0 ? (
-                  <ul style={{ marginTop: 8, paddingLeft: 18 }}>
-                    {svc._features.slice(0, 4).map((f, idx) => (
-                      <li key={idx}>{f}</li>
-                    ))}
-                  </ul>
-                ) : null}
+                {/* Note: services_catalog has no features/category; intentionally not rendered */}
               </button>
             );
           })}
