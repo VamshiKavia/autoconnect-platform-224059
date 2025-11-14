@@ -2,15 +2,19 @@ import React, { useMemo, useState } from "react";
 import { BOOKING_STEPS, useBooking } from "./context";
 import getSupabaseClient from "../../lib/supabaseClient";
 import { generateMockBookingReference } from "./mocks";
+import { addMockBooking } from "./mockStore";
+import useUser from "../../hooks/useUser";
 
 /**
 // PUBLIC_INTERFACE
  * ReviewStep - Step 6: Summarize selections and allow confirmation.
  * TODO: When REACT_APP_ENABLE_SUPABASE=true, Supabase insert is active.
+ * TODO: Remove mock store hookup when Supabase is re-enabled.
  */
 export default function ReviewStep({ canSubmit }) {
   const { vehicle, serviceType, center, dateTime, details, flags } = useBooking();
   const supabase = getSupabaseClient();
+  const { user } = useUser();
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,13 +38,58 @@ export default function ReviewStep({ canSubmit }) {
     setSubmitting(true);
     setErrorMsg("");
     try {
-      // Mock path: simulate success
+      // Mock path: persist to client-side store so My Bookings can list it.
       if (!flags?.supabaseEnabled) {
         const mockId = generateMockBookingReference();
-        setTimeout(() => {
-          setSuccess({ id: mockId, _note: "Supabase disabled: booking not persisted. This is a mock confirmation." });
-          setSubmitting(false);
-        }, 400);
+        const nowIso = new Date().toISOString();
+        const userId = user?.id || "mock-user";
+        const slotId = dateTime?.slotMeta?.id || dateTime?.slot || "mock-slot";
+
+        // Snapshot structure approximating DB row joins for MyBookings consumption in mock mode.
+        const mockRecord = addMockBooking({
+          id: mockId,
+          user_id: userId,
+          status: "pending",
+          created_at: nowIso,
+          updated_at: nowIso,
+          notes: details?.notes || "",
+          // Snapshot associations
+          vehicles: {
+            id: vehicle?.id || null,
+            make: vehicle?.make || "",
+            model: vehicle?.model || "",
+          },
+          service_types: {
+            id: serviceType?.id,
+            name: serviceType?.name,
+          },
+          service_centers: {
+            id: center?.id,
+            name: center?.name,
+            address: center?.address || "",
+          },
+          service_slots: {
+            id: slotId,
+            // For mock, we don't have exact timestamps; include friendly label in start and end.
+            start_at: nowIso,
+            end_at: nowIso,
+            label: dateTime?.slot || "",
+          },
+          // Keep raw fields similar to insert payload for parity
+          vehicle_id: vehicle?.id || null,
+          service_type_id: serviceType?.id,
+          service_center_id: center?.id,
+          slot_id: slotId,
+          contact_name: details?.name || "",
+          contact_phone: details?.phone || "",
+          contact_email: details?.email || "",
+          pickup_drop: !!details?.pickup,
+          estimated_price: isFiniteNumber(serviceType?.price) ? Number(serviceType.price) : null,
+          estimated_duration_minutes: isFiniteNumber(serviceType?.duration_min) ? Number(serviceType.duration_min) : null,
+        });
+
+        setSuccess({ id: mockRecord.id, _note: "Supabase disabled: booking stored locally." });
+        setSubmitting(false);
         return;
       }
 

@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import getSupabaseClient from '../lib/supabaseClient';
 import useUser from '../hooks/useUser';
+import { isSupabaseEnabled } from '../utils/featureFlags';
+import { listMockBookingsByUser } from './bookService/mockStore';
 
 /**
  * PUBLIC_INTERFACE
  * MyBookings - Lists authenticated user's service bookings with Ocean Professional UI.
- * - Supabase read-only; no logic changes beyond UI
+ * - Uses Supabase when enabled; otherwise reads from client-side mock store.
+ * - TODO: Remove mock store usage when Supabase is re-enabled.
  */
 export default function MyBookings() {
   const { user, loading: userLoading } = useUser();
@@ -17,10 +20,12 @@ export default function MyBookings() {
   const hasData = useMemo(() => Array.isArray(bookings) && bookings.length > 0, [bookings]);
 
   const supabase = useMemo(() => getSupabaseClient(), []);
+  const supabaseEnabled = useMemo(() => isSupabaseEnabled(), []);
+
   useEffect(() => {
     let isMounted = true;
 
-    async function load() {
+    async function loadSupabase() {
       if (!user) return;
       setStatus('loading');
       setError(null);
@@ -72,15 +77,32 @@ export default function MyBookings() {
       }
     }
 
+    function loadMock() {
+      if (!user) return;
+      setStatus('loading');
+      try {
+        const data = listMockBookingsByUser(user?.id || 'mock-user');
+        if (!isMounted) return;
+        setBookings(data || []);
+        setStatus('success');
+      } catch (e) {
+        console.error('Failed to load mock bookings', e);
+        if (!isMounted) return;
+        setError(e?.message || 'Failed to load bookings');
+        setStatus('error');
+      }
+    }
+
     if (!userLoading && user) {
-      load();
+      if (supabaseEnabled) loadSupabase();
+      else loadMock();
     } else if (!userLoading && !user) {
       setBookings([]);
       setStatus('success');
     }
 
     return () => { isMounted = false; };
-  }, [user, userLoading, supabase]);
+  }, [user, userLoading, supabase, supabaseEnabled]);
 
   function formatDateTime(dt) {
     try {
