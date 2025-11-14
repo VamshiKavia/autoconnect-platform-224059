@@ -161,7 +161,7 @@ export default function ServiceTypeStep({ onValidChange }) {
     <div className="card" aria-labelledby="servicetype-step-title">
       <h3 id="servicetype-step-title" className="section-title">Select Service Type</h3>
       <p className="subtitle">
-        Pick a service to continue. Pricing and durations are loaded from Supabase and will be finalized at the center.
+        Select a service to continue. Pricing and durations are loaded from Supabase and will be finalized at the center.
       </p>
 
       {/* Filter controls */}
