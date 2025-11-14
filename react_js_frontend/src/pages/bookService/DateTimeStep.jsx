@@ -6,10 +6,11 @@ import getSupabaseClient from "../../lib/supabaseClient";
 // PUBLIC_INTERFACE
  * DateTimeStep - Step 4: Pick Date and Time slot from Supabase.
  *
- * Query:
- *   supabase.from('center_slots')
- *     .select('id, center_id, date, start_time, end_time, is_available')
- *     .eq('center_id', booking.centerId)
+ * Schema-aligned query:
+ *   supabase
+ *     .from('center_slots')
+ *     .select('id,center_id,date,start_time,end_time,capacity,available')
+ *     .eq('center_id', booking.center.id)
  *     .eq('date', selectedDate)
  *
  * Validates: A valid date (>= today) and selecting an available slot.
@@ -18,13 +19,14 @@ import getSupabaseClient from "../../lib/supabaseClient";
 export default function DateTimeStep({ onValidChange }) {
   const { dateTime, setDateTime, center } = useBooking();
   const [date, setDate] = useState(dateTime?.date || "");
-  const [slot, setSlot] = useState(dateTime?.slot || ""); // display e.g., "09:00-10:00"
+  const [slot, setSlot] = useState(dateTime?.slot || "");
   const [slotId, setSlotId] = useState(dateTime?.slotId || null);
   const [touched, setTouched] = useState(false);
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [rlsWarning, setRlsWarning] = useState("");
 
   const centerId = center?.id;
 
@@ -45,21 +47,25 @@ export default function DateTimeStep({ onValidChange }) {
       }
       setLoading(true);
       setErr("");
+      setRlsWarning("");
       try {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
           .from("center_slots")
-          .select("id, center_id, date, start_time, end_time, is_available")
+          .select("id,center_id,date,start_time,end_time,capacity,available")
           .eq("center_id", centerId)
           .eq("date", date);
         if (error) throw error;
         if (!cancelled) setRows(Array.isArray(data) ? data : []);
       } catch (e) {
-        const msg = (e?.message || "").toLowerCase();
-        if (msg.includes("permission") || msg.includes("rls") || msg.includes("not authorized")) {
-          setErr("You do not have access to view available slots.");
+        const code = e?.code || "";
+        const message = e?.message || "";
+        const raw = message.toLowerCase();
+        if (raw.includes("permission") || raw.includes("rls") || raw.includes("not authorized")) {
+          setErr(`You do not have access to view available slots. ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
+          setRlsWarning("Reading center_slots requires RLS read policies. Enable read access for anon/authenticated as appropriate.");
         } else {
-          setErr("Failed to load available slots.");
+          setErr(`Failed to load available slots. ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -71,10 +77,9 @@ export default function DateTimeStep({ onValidChange }) {
     };
   }, [centerId, date]);
 
-  // Available slots for UI
   const slots = useMemo(() => {
     return rows
-      .filter((r) => r?.is_available)
+      .filter((r) => r?.available) // schema uses 'available'
       .map((r) => ({
         id: r.id,
         label: composeLabel(r.start_time, r.end_time),
@@ -84,7 +89,6 @@ export default function DateTimeStep({ onValidChange }) {
   }, [rows]);
 
   useEffect(() => {
-    // Compose ISO datetime using date + start time if available, else null
     const datetimeISO = composeISO(date, slots.find((s) => s.id === slotId)?.start || null);
     setDateTime({ date, slot, slotId, datetimeISO });
     onValidChange?.(isValid(date, slot, todayStr, slots, slotId));
@@ -102,11 +106,10 @@ export default function DateTimeStep({ onValidChange }) {
     const s = (start || "").slice(0, 5);
     const e = (end || "").slice(0, 5);
     return s && e ? `${s}-${e}` : s || e || "";
-    }
+  }
 
   function composeISO(d, start) {
     if (!d || !start) return null;
-    // Expect start as "HH:MM:SS" or "HH:MM"
     const [hh, mm] = start.split(":");
     const iso = new Date(`${d}T${hh?.padStart(2, "0") || "00"}:${mm?.padStart(2, "0") || "00"}:00`);
     if (isNaN(iso.getTime())) return null;
@@ -121,6 +124,12 @@ export default function DateTimeStep({ onValidChange }) {
       {!centerId && (
         <div className="card" style={{ color: "var(--error)" }}>
           Please select a service center first.
+        </div>
+      )}
+
+      {rlsWarning && (
+        <div className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
+          RLS: {rlsWarning}
         </div>
       )}
 

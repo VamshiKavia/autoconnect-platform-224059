@@ -54,8 +54,8 @@ export default function VehicleStep({ onValidChange }) {
       try {
         const { data, error } = await supabase
           .from("vehicles")
-          .select("id, make, model, year, image_url, owner_id, updated_at")
-          .eq("owner_id", user.id)
+          .select("id, make, model, year, image_url, user_id, updated_at")
+          .eq("user_id", user.id)
           .order("updated_at", { ascending: false });
         if (error) throw error;
         if (!cancelled) setRows(Array.isArray(data) ? data : []);

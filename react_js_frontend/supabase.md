@@ -83,14 +83,16 @@ If you see "Invalid email or password" even with correct credentials, check the 
 - "Car parts" (with a space)
   - Columns: id, title, Description, Category, Features, image_url, created_at, updated_at
 - service_types
-  - Primary expected columns: id, name, description, price, duration_min
-  - Fallback (if schema differs): base_price (mapped to price), duration_minutes (mapped to duration_min)
+  - Columns: id, name, description, category, features, image_url
+  - Notes: features can be text[], JSON, or stringified JSON; UI normalizes for display.
 - service_centers
-  - Columns: id, name, address, lat, lng, phone, hours
+  - Columns: id, name, address, city, state, zipcode, phone, email, latitude, longitude, image_url
 - center_slots
-  - Columns: id, center_id, date, start_time, end_time, is_available
+  - Columns: id, center_id, date, start_time, end_time, capacity, available
+- vehicles
+  - Columns: id, make, model, year, image_url, user_id, updated_at
 - bookings (inserted on confirmation)
-  - Columns: user_id, vehicle_id, service_type_id, service_center_id, datetime, notes, status
+  - Columns: user_id, vehicle_id, service_type_id, center_id, slot_id, scheduled_date, scheduled_time, status, notes, price
 
 Ensure RLS policies allow appropriate read (and insert for bookings) access for authenticated users.
 

@@ -8,36 +8,33 @@ import SignInRequiredBanner from "./SignInRequiredBanner.jsx";
 // PUBLIC_INTERFACE
  * ReviewStep - Step 6: Summarize selections and confirm to create booking in Supabase.
  *
- * Insert:
- *   supabase.from('bookings')
- *     .insert([{
- *       user_id, vehicle_id, service_type_id, service_center_id,
- *       datetime, notes, status
- *     }]).select().single()
+ * Insert (schema-aligned):
+ *   supabase.from('bookings').insert([{
+ *     user_id, vehicle_id, service_type_id, center_id, slot_id,
+ *     scheduled_date, scheduled_time, status, notes, price
+ *   }]).select().single()
  *
  * On success: show success state with booking id reference.
- * On error: show error banner (handle RLS/permission friendly messaging).
+ * On error: show error banner including error.code and error.message, with RLS guidance.
  */
 export default function ReviewStep({ canSubmit }) {
   const { user } = useAuth();
   const { vehicle, serviceType, center, dateTime, details } = useBooking();
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
-  const [success, setSuccess] = useState(null); // store inserted row
+  const [success, setSuccess] = useState(null);
+  const [rlsWarning, setRlsWarning] = useState("");
   const noticeRef = useRef(null);
 
   useEffect(() => {
-    // If user signs in while on this step, ensure any previous error about auth is cleared
     if (user && err && err.toLowerCase().includes("sign in")) {
       setErr("");
     }
   }, [user, err]);
 
   async function onConfirm() {
-    // Block when unauthenticated: focus the sign-in banner for guidance
     if (!user) {
       setErr("Please sign in to confirm your booking.");
-      // Focus the notice if present
       const el = document.getElementById("sign-in-required");
       if (el && typeof el.focus === "function") el.focus();
       return;
@@ -45,19 +42,32 @@ export default function ReviewStep({ canSubmit }) {
 
     if (!canSubmit || submitting) return;
     setErr("");
+    setRlsWarning("");
     setSubmitting(true);
     try {
       const supabase = getSupabaseClient();
 
-      // Map collected values to DB fields
+      // Compose scheduled_date and scheduled_time from selected slot
+      const scheduled_date = dateTime?.date || null;
+      let scheduled_time = null;
+      if (dateTime?.slot) {
+        // slot label looks like "HH:MM-HH:MM", take the start as scheduled_time
+        const start = String(dateTime.slot).split("-")[0] || "";
+        scheduled_time = start.length === 5 ? `${start}:00` : start; // ensure HH:MM:SS
+      }
+
       const payload = {
         user_id: user?.id || null,
-        vehicle_id: vehicle?.id || null, // may be null if manual entry
+        vehicle_id: vehicle?.id || null,
         service_type_id: serviceType?.id || null,
-        service_center_id: center?.id || null,
-        datetime: dateTime?.datetimeISO || null,
-        notes: String(details?.notes || ""),
+        center_id: center?.id || null,
+        slot_id: dateTime?.slotId || null,
+        scheduled_date,
+        scheduled_time,
         status: "pending",
+        notes: String(details?.notes || ""),
+        // Price is optional; if not derivable set null
+        price: typeof serviceType?.price === "number" ? serviceType.price : null,
       };
 
       const { data, error } = await supabase
@@ -69,14 +79,24 @@ export default function ReviewStep({ canSubmit }) {
       if (error) throw error;
       setSuccess(data || { id: "—" });
     } catch (e) {
-      const msg = (e?.message || "").toLowerCase();
-      if (msg.includes("permission") || msg.includes("rls") || msg.includes("not authorized")) {
-        setErr("You do not have permission to create a booking. Please sign in or contact support.");
-      } else if (msg.includes("foreign key") || msg.includes("violates")) {
-        setErr("One or more selected items are invalid or no longer available. Please review and try again.");
+      const code = e?.code || "";
+      const message = e?.message || "";
+      const raw = message.toLowerCase();
+
+      if (raw.includes("permission") || raw.includes("rls") || raw.includes("not authorized") || raw.includes("policy")) {
+        setRlsWarning("Inserting into bookings requires RLS insert policies for authenticated users.");
+        setErr(`Permission denied while creating booking. ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
+      } else if (raw.includes("foreign key") || raw.includes("violates")) {
+        setErr(`Invalid selection (foreign key). ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
       } else {
-        setErr("Failed to create booking. Please try again.");
+        setErr(`Failed to create booking. ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
       }
+
+      // eslint-disable-next-line no-console
+      console.error("[ReviewStep] insert error", { code, message, stack: e?.stack, env: {
+        hasUrl: !!process.env.REACT_APP_SUPABASE_URL,
+        hasKey: !!process.env.REACT_APP_SUPABASE_KEY,
+      }});
     } finally {
       setSubmitting(false);
     }
@@ -95,6 +115,11 @@ export default function ReviewStep({ canSubmit }) {
         </div>
       )}
 
+      {rlsWarning && (
+        <div className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
+          RLS: {rlsWarning}
+        </div>
+      )}
       {err && <div className="card" style={{ color: "var(--error)" }}>{err}</div>}
       {success && (
         <div className="card" style={{ color: "var(--success)" }}>
@@ -112,9 +137,6 @@ export default function ReviewStep({ canSubmit }) {
           <div>{serviceType?.name || "-"}</div>
           {serviceType && (
             <>
-              <div className="subtitle">
-                {serviceType?.price != null ? `$${serviceType.price}` : "$—"} • {serviceType?.duration_min || "—"} min
-              </div>
               {serviceType?.description ? (
                 <div className="subtitle" style={{ marginTop: 4 }}>
                   {serviceType.description}
@@ -126,7 +148,9 @@ export default function ReviewStep({ canSubmit }) {
 
         <SummaryCard title="Service Center" index={2}>
           <div>{center?.name || "-"}</div>
-          <div className="subtitle">{center?.address || "-"}</div>
+          <div className="subtitle">
+            {[center?.address, center?.city, center?.state, center?.zipcode].filter(Boolean).join(", ") || "-"}
+          </div>
         </SummaryCard>
 
         <SummaryCard title="Date & Time" index={3}>

@@ -6,9 +6,10 @@ import getSupabaseClient from "../../lib/supabaseClient";
 // PUBLIC_INTERFACE
  * CenterStep - Step 3: Choose a service center from Supabase list.
  *
- * Query:
- *   supabase.from('service_centers')
- *     .select('id, name, address, lat, lng, phone, hours')
+ * Schema-aligned query:
+ *   supabase
+ *     .from('service_centers')
+ *     .select('id,name,address,city,state,zipcode,phone,email,latitude,longitude,image_url')
  *     .order('name')
  *
  * Validates: A center must be selected.
@@ -19,26 +20,31 @@ export default function CenterStep({ onValidChange }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [rlsWarning, setRlsWarning] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       setErr("");
+      setRlsWarning("");
       try {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
           .from("service_centers")
-          .select("id, name, address, lat, lng, phone, hours")
+          .select("id,name,address,city,state,zipcode,phone,email,latitude,longitude,image_url")
           .order("name");
         if (error) throw error;
         if (!cancelled) setRows(Array.isArray(data) ? data : []);
       } catch (e) {
-        const msg = (e?.message || "").toLowerCase();
-        if (msg.includes("permission") || msg.includes("rls") || msg.includes("not authorized")) {
-          setErr("You do not have access to view service centers.");
+        const code = e?.code || "";
+        const message = e?.message || "";
+        const raw = message.toLowerCase();
+        if (raw.includes("permission") || raw.includes("rls") || raw.includes("not authorized")) {
+          setErr(`You do not have access to view service centers. ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
+          setRlsWarning("Reading service_centers requires RLS read policies. Enable read access for anon/authenticated as appropriate.");
         } else {
-          setErr("Failed to load service centers.");
+          setErr(`Failed to load service centers. ${code ? `(code: ${code})` : ""} ${message ? `— ${message}` : ""}`);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -62,6 +68,12 @@ export default function CenterStep({ onValidChange }) {
       <h3 id="center-step-title" className="section-title">Choose Service Center</h3>
       <p className="subtitle">Nearby Ocean Motors service locations.</p>
 
+      {rlsWarning && (
+        <div className="card" style={{ background: "#FEF2F2", borderColor: "#FCA5A5", color: "var(--error)" }}>
+          RLS: {rlsWarning}
+        </div>
+      )}
+
       {loading && <div className="card">Loading centers...</div>}
       {err && <div className="card" style={{ color: "var(--error)" }}>{err}</div>}
       {!loading && !err && rows.length === 0 && (
@@ -72,6 +84,7 @@ export default function CenterStep({ onValidChange }) {
         <div className="grid">
           {rows.map((c) => {
             const active = String(selected) === String(c.id);
+            const addressLine = [c.address, c.city, c.state, c.zipcode].filter(Boolean).join(", ");
             return (
               <article
                 key={c.id}
@@ -85,9 +98,9 @@ export default function CenterStep({ onValidChange }) {
                 <div className="row" style={{ justifyContent: "space-between" }}>
                   <div>
                     <strong>{c.name || "Service Center"}</strong>
-                    <div className="subtitle" style={{ marginTop: 4 }}>{c.address || "-"}</div>
+                    <div className="subtitle" style={{ marginTop: 4 }}>{addressLine || "-"}</div>
                     <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-                      {c.phone ? `☎ ${c.phone}` : ""} {c.hours ? ` • Hours: ${c.hours}` : ""}
+                      {c.phone ? `☎ ${c.phone}` : ""} {c.email ? ` • ${c.email}` : ""}
                     </div>
                   </div>
                   <div>
