@@ -44,7 +44,9 @@ export default function ReviewStep({ canSubmit, onConfirm }) {
 
         <SummaryCard title="Date & Time" index={3}>
           <div>{dateTime?.date || "-"}</div>
-          <div className="subtitle">{dateTime?.slot || "-"}</div>
+          <div className="subtitle">
+            {dateTime?.slot || "-"}
+          </div>
         </SummaryCard>
 
         <SummaryCard title="Details" index={4}>

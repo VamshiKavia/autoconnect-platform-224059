@@ -70,6 +70,27 @@ Ensure this exact URL (e.g. http://localhost:3000/login) is permitted by Supabas
     for select
     using (active = true);
 
+- Table: service_center_slots
+  - Columns (expected by UI): id (uuid), service_center_id (uuid), service_type_id (uuid|null), start_at (timestamptz), end_at (timestamptz), capacity (int), booked_count (int), status (text: 'available'|'held'|'booked'|'blocked'), active (boolean)
+  - The Date & Time step reads only rows where:
+    - active = true
+    - status = 'available'
+    - service_center_id = selected center id
+    - start_at within the selected calendar day (inclusive) [computed from local YYYY-MM-DD to 00:00:00..23:59:59.999, compared via ISO]
+    - If a service type is selected and service_type_id is not null, filter by `service_type_id = selected`
+  - RLS: If slots should be publicly readable, add a policy similar to:
+    policy "Public read of available active slots" on service_center_slots
+    for select
+    using (active = true AND status = 'available');
+  - Timezone note:
+    - We currently convert the chosen local date into a start/end ISO range using the user's local timezone and query `start_at` between those ISO timestamps. Supabase stores timestamptz in UTC.
+    - TODO(TZ): Make timezone explicit and consistent across backend/DB/app. Consider center-level timezone and server-side conversion.
+  - Conflict/capacity note:
+    - Client prevents selecting past times and only shows status='available'. Final conflict/capacity enforcement must happen on booking creation in the backend with transactional checks.
+  - Display mapping:
+    - Buttons show local time ranges via Intl.DateTimeFormat.
+    - When selected, we persist `{ id, start_at, end_at }` in `dateTime.slotMeta` and a friendly `dateTime.slot` label for Review.
+
 ## 5) Frontend behavior
 
 - `src/lib/supabaseClient.js` reads env vars and creates a singleton client.
