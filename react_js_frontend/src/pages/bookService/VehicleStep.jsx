@@ -5,11 +5,16 @@ import { useBooking } from "./context";
 // PUBLIC_INTERFACE
  * VehicleStep - Step 1: Select/enter vehicle details.
  *
- * Validates: make, model, year (yyyy). VIN optional.
+ * Validates: make, model. VIN optional.
  */
 export default function VehicleStep({ onValidChange }) {
   const { vehicle, setVehicle } = useBooking();
-  const [local, setLocal] = useState(vehicle || { make: "", model: "", year: "", vin: "" });
+  // Remove 'year' from local state shape
+  const [local, setLocal] = useState(
+    vehicle && typeof vehicle === "object"
+      ? { make: vehicle.make || "", model: vehicle.model || "", vin: vehicle.vin || "" }
+      : { make: "", model: "", vin: "" }
+  );
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
@@ -21,9 +26,7 @@ export default function VehicleStep({ onValidChange }) {
   }, [local]);
 
   function isValid(v) {
-    const y = String(v.year || "").trim();
-    const yOk = /^\d{4}$/.test(y) && Number(y) >= 1990 && Number(y) <= new Date().getFullYear() + 1;
-    return !!(v.make && v.model && yOk);
+    return !!(String(v.make || "").trim() && String(v.model || "").trim());
   }
 
   return (
@@ -61,23 +64,6 @@ export default function VehicleStep({ onValidChange }) {
       </div>
 
       <div className="row" style={{ flexWrap: "wrap", marginTop: 12 }}>
-        <div style={{ width: 160, minWidth: 140 }}>
-          <label className="label" htmlFor="vehicle-year">Year</label>
-          <input
-            id="vehicle-year"
-            className="input"
-            value={local.year}
-            onChange={(e) => setLocal((s) => ({ ...s, year: e.target.value }))}
-            placeholder="YYYY"
-            inputMode="numeric"
-            pattern="\d{4}"
-            required
-            onBlur={() => setTouched(true)}
-          />
-          {touched && (!/^\d{4}$/.test(String(local.year)) || Number(local.year) < 1990) && (
-            <FieldError text="Enter a valid year (1990+)" />
-          )}
-        </div>
         <div style={{ flex: "1 1 240px", minWidth: 240 }}>
           <label className="label" htmlFor="vehicle-vin">VIN (optional)</label>
           <input

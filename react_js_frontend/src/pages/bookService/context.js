@@ -18,7 +18,7 @@ export function BookingProvider({ children }) {
    * Provides in-memory state for the booking flow.
    * Persisting to localStorage is not required yet; in-memory retains across steps.
    */
-  const [vehicle, setVehicle] = useState({ make: "", model: "", year: "", vin: "" });
+  const [vehicle, setVehicle] = useState({ make: "", model: "", vin: "" }); // removed 'year'
   const [serviceType, setServiceType] = useState(null);
   const [center, setCenter] = useState(null);
   const [dateTime, setDateTime] = useState({ date: "", slot: "" });
@@ -51,7 +51,7 @@ export function BookingProvider({ children }) {
 }
 
 const BookingContext = createContext({
-  vehicle: { make: "", model: "", year: "", vin: "" },
+  vehicle: { make: "", model: "", vin: "" }, // removed 'year'
   setVehicle: () => {},
   serviceType: null,
   setServiceType: () => {},

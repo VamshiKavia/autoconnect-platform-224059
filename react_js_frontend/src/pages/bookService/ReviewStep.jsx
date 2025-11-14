@@ -17,9 +17,8 @@ export default function ReviewStep({ canSubmit, onConfirm }) {
 
       <div className="grid" role="list" aria-label="Booking summary">
         <SummaryCard title="Vehicle" index={0}>
-          <div>{vehicle.make} {vehicle.model}</div>
-          <div className="subtitle">Year: {vehicle.year || "-"}</div>
-          <div className="subtitle">VIN: {vehicle.vin || "-"}</div>
+          <div>{(vehicle?.make || "-")} {(vehicle?.model || "")}</div>
+          <div className="subtitle">VIN: {vehicle?.vin || "-"}</div>
         </SummaryCard>
 
         <SummaryCard title="Service Type" index={1}>
