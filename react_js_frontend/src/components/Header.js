@@ -6,8 +6,8 @@ import { useAuth } from "../context/AuthContext";
 // PUBLIC_INTERFACE
  * Header - Top navigation bar shown when authenticated.
  *
- * Shows brand, primary nav, and a user menu with avatar, display name/email,
- * links to Profile and Sign out. Minimalist Ocean Professional styling.
+ * Shows brand, primary nav, and a user menu with the user's display name/email
+ * (no avatar image). Links to Profile and Sign out. Minimalist Ocean Professional styling.
  */
 export default function Header() {
   const { user, signOut } = useAuth();
@@ -15,11 +15,11 @@ export default function Header() {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
+  // Only show display name or fallback email; do not read or render avatar URLs.
   const displayName =
     user?.user_metadata?.display_name?.trim() ||
     user?.email ||
     "Account";
-  const avatarUrl = user?.user_metadata?.avatar_url?.trim() || "";
 
   async function handleLogout() {
     try {
@@ -64,31 +64,16 @@ export default function Header() {
             aria-haspopup="menu"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer"
+            }}
           >
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt="User avatar"
-                width={28}
-                height={28}
-                style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", background: "#fff", border: "1px solid #E5E7EB" }}
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "50%",
-                  background: "var(--surface)",
-                  border: "1px solid #E5E7EB",
-                }}
-              />
-            )}
+            {/* Text-only profile trigger to comply with no-avatar requirement */}
             <span style={{ color: "var(--primary)", fontWeight: 600, fontSize: 14 }}>
               {displayName}
             </span>
