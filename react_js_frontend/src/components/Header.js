@@ -56,6 +56,7 @@ export default function Header() {
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Parts</NavLink>
+          <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/nearby-centers">Nearby Centers</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/book-service">Book My Service</NavLink>
           <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/my-bookings">My Bookings</NavLink>
         </nav>

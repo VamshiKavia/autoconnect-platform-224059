@@ -9,6 +9,12 @@ Temporary feature flag
 Optional JSON override
 - REACT_APP_FEATURE_FLAGS='{"ENABLE_SUPABASE": true}' can also turn on Supabase features.
 
+Nearby Centers page
+- File: src/pages/NearbyCenters.jsx
+- When REACT_APP_ENABLE_SUPABASE=false (default), it uses mock centers and a placeholder map.
+- When REACT_APP_ENABLE_SUPABASE=true, replace the mock fetch with a Supabase query to service_centers using geo filtering (see TODOs in the component).
+- The config helper getEnableSupabaseFlag() in src/config.js can be used elsewhere to check this flag consistently.
+
 Guarded areas (re-enable by toggling the flag):
 - VehicleStep: loads user vehicles from Supabase when enabled, otherwise uses mock list.
 - ServiceTypeStep: loads service_types when enabled, otherwise uses mock list.

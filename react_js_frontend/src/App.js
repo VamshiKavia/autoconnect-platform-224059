@@ -10,6 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Header from "./components/Header";
 import BookService from "./pages/BookService";
 import MyBookings from "./pages/MyBookings";
+import NearbyCenters from "./pages/NearbyCenters.jsx";
 
 /**
 // PUBLIC_INTERFACE
@@ -71,6 +72,7 @@ function AppRoutes() {
       <Route path="/book-service" element={<BookService />} />
       <Route path="/my-bookings" element={<MyBookings />} />
       <Route path="/profile" element={<Profile />} />
+      <Route path="/nearby-centers" element={<NearbyCenters />} />
       {/* Catch-all inside protected area */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

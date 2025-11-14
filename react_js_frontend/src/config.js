@@ -46,6 +46,27 @@ export function getLogLevel() {
   return process.env.REACT_APP_LOG_LEVEL || "info";
 }
 
+/**
+// PUBLIC_INTERFACE
+ * getEnableSupabaseFlag - returns boolean indicating if Supabase features are enabled.
+ * It reads the REACT_APP_ENABLE_SUPABASE env var or falls back to feature flags.
+ */
+export function getEnableSupabaseFlag() {
+  const direct = (process.env.REACT_APP_ENABLE_SUPABASE || "").toLowerCase();
+  if (direct === "true") return true;
+  if (direct === "false") return false;
+
+  const flags = getFeatureFlags();
+  const inFlags = flags.ENABLE_SUPABASE;
+  if (typeof inFlags === "boolean") return inFlags;
+  if (typeof inFlags === "string") {
+    const l = inFlags.toLowerCase();
+    if (l === "true") return true;
+    if (l === "false") return false;
+  }
+  return false;
+}
+
 // PUBLIC_INTERFACE
 export function validateRequiredEnv() {
   /**
