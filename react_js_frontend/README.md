@@ -1,6 +1,6 @@
 # React Frontend - Ocean Professional
 
-Minimalist SPA for the car company app with navigation, auth (stub), cars, services, parts, and profile management (mock).
+Minimalist SPA for the car company app with navigation, auth, cars, services, spare parts, service centers, and profile management (mock).
 
 ## Environment
 
@@ -18,6 +18,7 @@ The frontend uses the following env vars (do not hardcode secrets):
 - REACT_APP_HEALTHCHECK_PATH
 - REACT_APP_FEATURE_FLAGS
 - REACT_APP_EXPERIMENTS_ENABLED
+- REACT_APP_MAPS_API_KEY (optional, for future map integration)
 
 Create a .env file locally as needed. See .env.example for typical values.
 
@@ -63,3 +64,5 @@ The backend FastAPI app should configure CORS to include these origins.
 - API client: src/api/client.js using env base URL with `/api` prefix handling and improved error messages
 - Config helpers: src/config.js (feature flags, validation)
 - Tests: basic tests in src/api/client.test.js and src/config.test.js
+- New pages: Service Centers at /service-centers with map placeholder and searchable list
+- Auth page at /auth offering Login/Signup; token is persisted to localStorage and attached via Authorization header by the API client
