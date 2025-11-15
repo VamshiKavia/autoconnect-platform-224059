@@ -4,6 +4,7 @@ import Home from "./pages/Home";
 import Services from "./pages/Services";
 import Parts from "./pages/Parts";
 import Profile from "./pages/Profile";
+import ServiceCenters from "./pages/ServiceCenters";
 // Auth page retained but not linked; route commented below to make it unreachable from UI
 // import Auth from "./pages/Auth";
 
@@ -29,6 +30,7 @@ function App() {
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Parts</NavLink>
+            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/service-centers">Service Centers</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/profile">Profile</NavLink>
           </nav>
         </div>
@@ -40,6 +42,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
           <Route path="/parts" element={<Parts />} />
+          <Route path="/service-centers" element={<ServiceCenters />} />
           <Route path="/profile" element={<Profile />} />
 
           {/* Keep /auth page file, but make it unreachable from UI for now */}
