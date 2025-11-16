@@ -6,6 +6,8 @@ import Parts from "./pages/Parts";
 import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import ServiceCenters from "./pages/ServiceCenters";
+import Cars from "./pages/Cars";
+import CarDetailsPage from "./pages/CarDetailsPage";
 
 /**
 // PUBLIC_INTERFACE
@@ -41,8 +43,7 @@ function App() {
           <div className="brand">Ocean Motors</div>
           <nav className="nav-links" aria-label="Primary">
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
-            {/* Cars reuses Home launches for now */}
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Cars</NavLink>
+            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/cars">Cars</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Spare Parts</NavLink>
             <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/service-centers">Service Centers</NavLink>
@@ -57,6 +58,8 @@ function App() {
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<Home />} />
+            <Route path="/cars" element={<Cars />} />
+            <Route path="/cars/:id" element={<CarDetailsPage />} />
             <Route path="/services" element={<Services />} />
             <Route path="/parts" element={<Parts />} />
             <Route path="/service-centers" element={<ServiceCenters />} />

@@ -118,7 +118,7 @@ export default function Home() {
             </p>
             <div style={{ height: 12 }} />
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <a className="btn" href="#latest-launch-details">Explore</a>
+              <a className="btn" href="/cars">Explore</a>
               <a
                 className="btn secondary"
                 href="#latest-launch-details"
@@ -196,17 +196,13 @@ export default function Home() {
             <div style={{ height: 12 }} />
             <h3 className="section-title" style={{ marginBottom: 4 }}>{item.name}</h3>
             <p className="subtitle" style={{ marginBottom: 12 }}>{item.description}</p>
-            <button
+            <a
               className="btn"
               aria-label={`View details for ${item.name}`}
-              onClick={() => {
-                // Placeholder CTA action — in a full app this would navigate
-                // to a model details page or open a modal
-                alert(`${item.name} details coming soon`);
-              }}
+              href={`/cars/${encodeURIComponent(item.id)}`}
             >
               View Details
-            </button>
+            </a>
           </article>
         ))}
       </section>
