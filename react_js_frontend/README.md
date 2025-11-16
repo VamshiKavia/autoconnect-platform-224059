@@ -1,65 +1,82 @@
-# React Frontend - Ocean Professional
+# Lightweight React Template for KAVIA
 
-Minimalist SPA for the car company app with navigation, auth (stub), cars, services, parts, and profile management (mock).
+This project provides a minimal React template with a clean, modern UI and minimal dependencies.
 
-## Environment
+## Features
 
-The frontend uses the following env vars (do not hardcode secrets):
+- **Lightweight**: No heavy UI frameworks - uses only vanilla CSS and React
+- **Modern UI**: Clean, responsive design with KAVIA brand styling
+- **Fast**: Minimal dependencies for quick loading times
+- **Simple**: Easy to understand and modify
 
-- REACT_APP_API_BASE or REACT_APP_BACKEND_URL: Base URL of backend (default http://localhost:3001)
-- REACT_APP_FRONTEND_URL
-- REACT_APP_WS_URL
-- REACT_APP_NODE_ENV
-- REACT_APP_NEXT_TELEMETRY_DISABLED
-- REACT_APP_ENABLE_SOURCE_MAPS
-- REACT_APP_PORT
-- REACT_APP_TRUST_PROXY
-- REACT_APP_LOG_LEVEL
-- REACT_APP_HEALTHCHECK_PATH
-- REACT_APP_FEATURE_FLAGS
-- REACT_APP_EXPERIMENTS_ENABLED
+## Getting Started
 
-Create a .env file locally as needed. See .env.example for typical values.
+In the project directory, you can run:
 
-### Feature flags
-Set REACT_APP_FEATURE_FLAGS to enable optional behaviors:
-- MOCK_BACKEND:true -> Use graceful in-app mock responses when API calls fail (for local dev without backend)
+### `npm start`
 
-Example:
-REACT_APP_FEATURE_FLAGS=MOCK_BACKEND:true
+Runs the app in development mode.\
+Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
-## Run
+### `npm test`
 
-npm install
-npm start
+Launches the test runner in interactive watch mode.
 
-Open http://localhost:3000
+### `npm run build`
 
-Ensure backend is running on port 3001, or enable MOCK_BACKEND flag for local mocks.
+Builds the app for production to the `build` folder.\
+It correctly bundles React in production mode and optimizes the build for the best performance.
 
-## API Paths and Health
+## Customization
 
-- The API client automatically prefixes requests with `/api`. For example:
-  - `apiGet("/cars")` -> `GET {REACT_APP_API_BASE}/api/cars`
-  - `apiPost("/auth/login")` -> `POST {REACT_APP_API_BASE}/api/auth/login`
-- If your backend does not use `/api` prefix, either:
-  - Set your routes to use `/api/*`, or
-  - Pass fully-qualified API paths beginning with `/api/...` (the client will not double-prefix), or
-  - Adjust the client accordingly.
-- A healthcheck is performed from the Home page against `{REACT_APP_API_BASE}{REACT_APP_HEALTHCHECK_PATH}` (defaults to `/`), showing connectivity status.
+### Colors
 
-## CORS
+The main brand colors are defined as CSS variables in `src/App.css`:
 
-Backend must allow the frontend origin:
-- Local dev: http://localhost:3000
-- Deployed preview: your preview URL
+```css
+:root {
+  --kavia-orange: #E87A41;
+  --kavia-dark: #1A1A1A;
+  --text-color: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --border-color: rgba(255, 255, 255, 0.1);
+}
+```
 
-The backend FastAPI app should configure CORS to include these origins.
+### Components
 
-## Notes
+This template uses pure HTML/CSS components instead of a UI framework. You can find component styles in `src/App.css`. 
 
-- Theme: Ocean Professional (see src/theme.css)
-- Routing: react-router-dom
-- API client: src/api/client.js using env base URL with `/api` prefix handling and improved error messages
-- Config helpers: src/config.js (feature flags, validation)
-- Tests: basic tests in src/api/client.test.js and src/config.test.js
+Common components include:
+- Buttons (`.btn`, `.btn-large`)
+- Container (`.container`)
+- Navigation (`.navbar`)
+- Typography (`.title`, `.subtitle`, `.description`)
+
+## Learn More
+
+To learn React, check out the [React documentation](https://reactjs.org/).
+
+### Code Splitting
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+
+### Analyzing the Bundle Size
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+
+### Making a Progressive Web App
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+
+### Advanced Configuration
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+
+### Deployment
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+
+### `npm run build` fails to minify
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

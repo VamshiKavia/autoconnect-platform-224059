@@ -1,63 +1,47 @@
-import { Routes, Route, Navigate, NavLink } from "react-router-dom";
-import "./theme.css";
-import Home from "./pages/Home";
-import Services from "./pages/Services";
-import Parts from "./pages/Parts";
-import Profile from "./pages/Profile";
-import ServiceCenters from "./pages/ServiceCenters";
-// Auth page retained but not linked; route commented below to make it unreachable from UI
-// import Auth from "./pages/Auth";
+import React, { useState, useEffect } from 'react';
+import logo from './logo.svg';
+import './App.css';
 
-/**
 // PUBLIC_INTERFACE
- * App - Application shell with public navigation and route definitions.
- *
- * Changes:
- * - Removed authentication state, ProtectedRoute, and login/auth UI.
- * - All routes are public. Home remains landing page.
- * - Navbar order: Home, Services, Parts, Profile (Profile last).
- * - Standalone /auth route is intentionally disabled in the UI (commented out).
- *
- * Requires being wrapped with <BrowserRouter> in index.js to provide routing context.
- */
 function App() {
+  const [theme, setTheme] = useState('light');
+
+  // Effect to apply theme to document element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  // PUBLIC_INTERFACE
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+
   return (
-    <div className="app-shell">
-      <header className="navbar">
-        <div className="nav-container">
-          <div className="brand">Ocean Motors</div>
-          <nav className="nav-links" aria-label="Primary">
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/">Home</NavLink>
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/services">Services</NavLink>
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/parts">Parts</NavLink>
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/service-centers">Service Centers</NavLink>
-            <NavLink className={({ isActive }) => "nav-link" + (isActive ? " active" : "")} to="/profile">Profile</NavLink>
-          </nav>
-        </div>
+    <div className="App">
+      <header className="App-header">
+        <button 
+          className="theme-toggle" 
+          onClick={toggleTheme}
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        >
+          {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
+        </button>
+        <img src={logo} className="App-logo" alt="logo" />
+        <p>
+          Edit <code>src/App.js</code> and save to reload.
+        </p>
+        <p>
+          Current theme: <strong>{theme}</strong>
+        </p>
+        <a
+          className="App-link"
+          href="https://reactjs.org"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Learn React
+        </a>
       </header>
-
-      <main className="main">
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<Home />} />
-          <Route path="/services" element={<Services />} />
-          <Route path="/parts" element={<Parts />} />
-          <Route path="/service-centers" element={<ServiceCenters />} />
-          <Route path="/profile" element={<Profile />} />
-
-          {/* Keep /auth page file, but make it unreachable from UI for now */}
-          {/*
-          <Route path="/auth" element={<Auth onLogin={() => { /* no-op in public mode */ /* }} />} />
-          */}
-
-          {/* Fallback to Home for unknown routes */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-
-      <footer className="footer">
-        <div className="container">© {new Date().getFullYear()} Ocean Motors</div>
-      </footer>
     </div>
   );
 }
